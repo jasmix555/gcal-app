@@ -28,7 +28,13 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    // Auto-collapse the sidebar on small screens (phones / narrow windows).
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  }, []);
 
   // FullCalendar sizes to its container; nudge it to refit after the sidebar
   // shows/hides (the main area width changes).
@@ -87,14 +93,16 @@ export default function Home() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(e),
         });
-        if (!res.ok) throw new Error((await res.json()).error || "Update failed");
+        if (!res.ok)
+          throw new Error((await res.json()).error || "Update failed");
       } else {
         const res = await fetch("/api/events", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...e, groupId: currentGroupId }),
         });
-        if (!res.ok) throw new Error((await res.json()).error || "Create failed");
+        if (!res.ok)
+          throw new Error((await res.json()).error || "Create failed");
       }
       setModalEvent(null);
       refetch();
