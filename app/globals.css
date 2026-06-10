@@ -1,0 +1,235 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  height: 100%;
+}
+
+/* ===========================================================================
+   FullCalendar — modern, soft, Google-Calendar-style theme.
+   Mostly driven by FullCalendar's own CSS variables.
+   ======================================================================== */
+.fc {
+  height: 100%;
+  --fc-border-color: #eef1f5;
+  --fc-page-bg-color: #ffffff;
+  --fc-neutral-bg-color: #f8fafc;
+  --fc-today-bg-color: rgba(37, 99, 235, 0.06); /* soft blue, not cream */
+  --fc-now-indicator-color: #ef4444;
+  --fc-event-border-color: transparent;
+  font-family: inherit;
+}
+
+/* Toolbar */
+.fc .fc-toolbar.fc-header-toolbar {
+  margin-bottom: 1rem;
+}
+
+.fc .fc-toolbar-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* Buttons → soft, rounded, light (Google-style pills) */
+.fc .fc-button {
+  border-radius: 9px;
+  border: 1px solid #e3e8ef;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.4rem 0.75rem;
+  box-shadow: none;
+  text-transform: capitalize;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.fc .fc-button:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.fc .fc-button:active {
+  transform: scale(0.97);
+}
+
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+.fc .fc-button:focus,
+.fc .fc-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.fc .fc-button .fc-icon {
+  font-size: 1.1em;
+}
+
+/* Group the view buttons into a segmented control */
+.fc .fc-button-group {
+  gap: 4px;
+}
+
+/* Column headers */
+.fc .fc-col-header-cell {
+  background: transparent;
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  padding: 0.6rem 0;
+}
+
+.fc .fc-col-header-cell-cushion,
+.fc .fc-daygrid-day-number {
+  color: inherit;
+  text-decoration: none;
+  padding: 6px 8px;
+}
+
+/* Today's date number → blue pill */
+.fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-number {
+  background: #2563eb;
+  color: #ffffff;
+  border-radius: 9999px;
+  width: 1.6rem;
+  height: 1.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 4px;
+}
+
+/* Time axis labels */
+.fc .fc-timegrid-slot-label-cushion,
+.fc .fc-timegrid-axis-cushion {
+  color: #94a3b8;
+  font-size: 0.72rem;
+}
+
+/* Events → rounded, padded, soft shadow, gentle hover lift */
+.fc .fc-event,
+.fc .fc-event .fc-event-main {
+  border: none;
+  border-radius: 8px;
+}
+
+.fc .fc-event {
+  padding: 1px 2px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    filter 0.12s ease;
+}
+
+.fc .fc-event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.18);
+  filter: brightness(1.03);
+  z-index: 5;
+}
+
+.fc .fc-event-title {
+  font-weight: 600;
+  padding: 1px 2px;
+}
+
+.fc .fc-event-time {
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+/* Soft scrollbars inside the calendar */
+.fc .fc-scroller::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.fc .fc-scroller::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 9999px;
+}
+
+.fc .fc-scroller::-webkit-scrollbar-thumb:hover {
+  background: #cbd5e1;
+}
+
+/* List view rows */
+.fc .fc-list {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.fc .fc-list-event:hover td {
+  background: #f8fafc;
+}
+
+/* ===========================================================================
+   Soft, reusable animations.
+   ======================================================================== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.18s ease both;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-rise-in {
+  animation: riseIn 0.25s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-scale-in,
+  .animate-rise-in,
+  .fc .fc-event {
+    animation: none !important;
+    transition: none !important;
+  }
+}

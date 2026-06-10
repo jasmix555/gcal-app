@@ -1,0 +1,161 @@
+// Prisma schema for the team calendar app.
+// Database: MySQL (XAMPP / MariaDB compatible).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth models (NextAuth Prisma adapter). passwordHash powers email/password
+// login; Account/Session support Google (and future OAuth) sign-in.
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String? // null for users who only sign in with Google
+  createdAt     DateTime  @default(now())
+
+  accounts      Account[]
+  sessions      Session[]
+  memberships   Membership[]
+  createdEvents Event[]         @relation("EventCreatedBy")
+  updatedEvents Event[]         @relation("EventUpdatedBy")
+  activities    EventActivity[]
+  sentInvites   Invitation[]    @relation("InvitedBy")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// Team models: groups, memberships, invitations.
+// ---------------------------------------------------------------------------
+
+model Group {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  memberships Membership[]
+  events      Event[]
+  invitations Invitation[]
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  userId    String
+  groupId   String
+  role      Role     @default(MEMBER)
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@index([groupId])
+}
+
+model Invitation {
+  id          String   @id @default(cuid())
+  email       String
+  groupId     String
+  role        Role     @default(MEMBER)
+  token       String   @unique
+  status      String   @default("pending") // pending | accepted | revoked
+  invitedById String
+  createdAt   DateTime @default(now())
+
+  group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  invitedBy User  @relation("InvitedBy", fields: [invitedById], references: [id])
+
+  @@index([email])
+  @@index([groupId])
+}
+
+// ---------------------------------------------------------------------------
+// Events + attribution / activity log.
+// ---------------------------------------------------------------------------
+
+model Event {
+  id          String   @id @default(cuid())
+  groupId     String
+  title       String
+  description String?  @db.Text
+  location    String?
+  start       DateTime
+  end         DateTime
+  allDay      Boolean  @default(false)
+  createdById String
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  group      Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy  User            @relation("EventCreatedBy", fields: [createdById], references: [id])
+  updatedBy  User?           @relation("EventUpdatedBy", fields: [updatedById], references: [id])
+  activities EventActivity[]
+
+  @@index([groupId])
+  @@index([start])
+}
+
+model EventActivity {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  action    String // created | updated | deleted
+  detail    String?  @db.Text
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@index([eventId])
+}
