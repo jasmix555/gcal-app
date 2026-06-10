@@ -26,8 +26,16 @@ export default function Home() {
   const [modalEvent, setModalEvent] = useState<EditableEvent | null>(null);
   const [canDelete, setCanDelete] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => setMounted(true), []);
+
+  // FullCalendar sizes to its container; nudge it to refit after the sidebar
+  // shows/hides (the main area width changes).
+  function toggleSidebar() {
+    setSidebarOpen((v) => !v);
+    setTimeout(() => window.dispatchEvent(new Event("resize")), 60);
+  }
 
   const loadGroups = useCallback(async () => {
     const res = await fetch("/api/groups");
@@ -146,34 +154,61 @@ export default function Home() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar
-        user={session?.user}
-        groups={groups}
-        currentGroupId={currentGroupId}
-        onSelectGroup={(id) => setCurrentGroupId(id)}
-        onGroupsChanged={loadGroups}
-        onNewEvent={openNewEvent}
-      />
+      {sidebarOpen && (
+        <Sidebar
+          user={session?.user}
+          groups={groups}
+          currentGroupId={currentGroupId}
+          onSelectGroup={(id) => setCurrentGroupId(id)}
+          onGroupsChanged={loadGroups}
+          onNewEvent={openNewEvent}
+        />
+      )}
 
-      <main className="flex-1 overflow-hidden p-3 md:p-5">
-        <div className="animate-fade-in h-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:p-4">
-          {mounted && (
-            <CalendarView
-              ref={calRef}
-              groupId={currentGroupId}
-              onEventClick={openExisting}
-              onSelectRange={(range) => {
-                setModalEvent({
-                  title: "",
-                  start: range.start,
-                  end: range.end,
-                  allDay: range.allDay,
-                });
-                setCanDelete(false);
-              }}
-              onReschedule={handleReschedule}
-            />
-          )}
+      <main className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex items-center gap-2 px-3 pt-3 md:px-5">
+          <button
+            onClick={toggleSidebar}
+            aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+            title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+            className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <line x1="9" y1="4" x2="9" y2="20" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-hidden p-3 pt-2 md:px-5 md:pb-5">
+          <div className="animate-fade-in h-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:p-4">
+            {mounted && (
+              <CalendarView
+                ref={calRef}
+                groupId={currentGroupId}
+                onEventClick={openExisting}
+                onSelectRange={(range) => {
+                  setModalEvent({
+                    title: "",
+                    start: range.start,
+                    end: range.end,
+                    allDay: range.allDay,
+                  });
+                  setCanDelete(false);
+                }}
+                onReschedule={handleReschedule}
+              />
+            )}
+          </div>
         </div>
       </main>
 

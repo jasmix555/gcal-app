@@ -75,6 +75,7 @@ model VerificationToken {
 model Group {
   id        String   @id @default(cuid())
   name      String
+  joinCode  String?  @unique // reusable code for the shareable group invite link
   createdAt DateTime @default(now())
 
   memberships Membership[]

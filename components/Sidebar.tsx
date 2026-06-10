@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 import { colorForKey } from "@/lib/colors";
+import InviteModal from "@/components/InviteModal";
 
 interface GroupSummary {
   id: string;
@@ -66,8 +67,7 @@ export default function Sidebar({
   const [members, setMembers] = useState<Member[]>([]);
   const [myRole, setMyRole] = useState<string>("MEMBER");
   const [newGroup, setNewGroup] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [showInvite, setShowInvite] = useState(false);
   const [pending, setPending] = useState<PendingInvite[]>([]);
 
   useEffect(() => {
@@ -82,7 +82,6 @@ export default function Sidebar({
         setMyRole(d.myRole || "MEMBER");
       })
       .catch(() => setMembers([]));
-    setInviteLink(null);
   }, [currentGroupId]);
 
   function loadPending() {
@@ -109,21 +108,6 @@ export default function Sidebar({
     if (d.group?.id) onSelectGroup(d.group.id);
   }
 
-  async function invite(e: React.FormEvent) {
-    e.preventDefault();
-    const email = inviteEmail.trim();
-    if (!email || !currentGroupId) return;
-    const res = await fetch(`/api/groups/${currentGroupId}/invitations`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
-    const d = await res.json();
-    if (!res.ok) return alert(d.error || "Could not send invite");
-    setInviteEmail("");
-    setInviteLink(d.invitation?.inviteLink || null);
-  }
-
   async function accept(token: string) {
     const res = await fetch("/api/invitations/accept", {
       method: "POST",
@@ -138,6 +122,8 @@ export default function Sidebar({
   }
 
   const canInvite = myRole === "OWNER" || myRole === "ADMIN";
+  const currentGroupName =
+    groups.find((g) => g.id === currentGroupId)?.name || "this group";
 
   return (
     <aside className="animate-fade-in flex w-[300px] shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-200 bg-white px-4 py-4">
@@ -216,28 +202,9 @@ export default function Sidebar({
       )}
 
       {currentGroupId && canInvite && (
-        <div>
-          <p className={label}>Invite</p>
-          <form className="flex gap-1.5" onSubmit={invite}>
-            <input
-              className={input}
-              type="email"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="person@email.com"
-            />
-            <button className={btn} type="submit">
-              Invite
-            </button>
-          </form>
-          {inviteLink && (
-            <div className="mt-2 break-all rounded-md border border-dashed border-slate-300 bg-white p-1.5 text-[11px] text-slate-500">
-              Share this link with them:
-              <br />
-              {inviteLink}
-            </div>
-          )}
-        </div>
+        <button className={`${btn} w-full`} onClick={() => setShowInvite(true)}>
+          Invite people
+        </button>
       )}
 
       {pending.length > 0 && (
@@ -272,6 +239,14 @@ export default function Sidebar({
           Sign out
         </button>
       </div>
+
+      {showInvite && currentGroupId && (
+        <InviteModal
+          groupId={currentGroupId}
+          groupName={currentGroupName}
+          onClose={() => setShowInvite(false)}
+        />
+      )}
     </aside>
   );
 }
