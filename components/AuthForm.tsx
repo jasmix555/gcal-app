@@ -5,8 +5,9 @@ import { signIn, getProviders } from "next-auth/react";
 import Link from "next/link";
 
 const input =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent";
-const label = "mb-1 block text-xs font-medium text-slate-500";
+  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-accent dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500";
+const label =
+  "mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400";
 
 export default function AuthForm({ mode }: { mode: "login" | "register" }) {
   const isRegister = mode === "register";
@@ -73,8 +74,8 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-      <div className="animate-scale-in flex w-[380px] max-w-full flex-col gap-3.5 rounded-2xl border border-slate-200 bg-white p-7 shadow-[0_10px_30px_rgba(0,0,0,0.06)]">
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6 dark:bg-slate-950">
+      <div className="animate-scale-in flex w-[380px] max-w-full flex-col gap-3.5 rounded-2xl border border-slate-200 bg-white p-7 shadow-[0_10px_30px_rgba(0,0,0,0.06)] dark:border-slate-800 dark:bg-slate-900">
         <h1 className="text-xl font-semibold">
           📅 {isRegister ? "Create your account" : "Sign in"}
         </h1>
@@ -136,7 +137,7 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
 
         {googleEnabled && (
           <button
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm transition hover:bg-slate-50"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
             onClick={() => signIn("google", { callbackUrl })}
           >
             Continue with Google
@@ -145,7 +146,7 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
 
         {!isRegister && (
           <>
-            <div className="flex items-center gap-2.5 text-xs text-slate-400 before:h-px before:flex-1 before:bg-slate-200 after:h-px after:flex-1 after:bg-slate-200">
+            <div className="flex items-center gap-2.5 text-xs text-slate-400 before:h-px before:flex-1 before:bg-slate-200 after:h-px after:flex-1 after:bg-slate-200 dark:before:bg-slate-700 dark:after:bg-slate-700">
               just exploring?
             </div>
             <button

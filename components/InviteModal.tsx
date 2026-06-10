@@ -17,7 +17,7 @@ interface Props {
 }
 
 const input =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500";
+  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500";
 
 export default function InviteModal({ groupId, groupName, onClose }: Props) {
   const [link, setLink] = useState("");
@@ -102,11 +102,11 @@ export default function InviteModal({ groupId, groupName, onClose }: Props) {
 
         {!loading && !error && (
           <div className="flex flex-col gap-4">
-            <div className="rounded-xl bg-slate-50 p-3 text-center">
+            <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-slate-800">
               <div className="text-xs uppercase tracking-wide text-slate-400">
                 Group code
               </div>
-              <div className="select-all font-mono text-lg font-semibold tracking-wider text-slate-800">
+              <div className="select-all font-mono text-lg font-semibold tracking-wider text-slate-800 dark:text-slate-100">
                 {code}
               </div>
             </div>
@@ -143,7 +143,7 @@ export default function InviteModal({ groupId, groupName, onClose }: Props) {
               Share
             </Button>
 
-            <div className="border-t border-slate-200 pt-3">
+            <div className="border-t border-slate-200 pt-3 dark:border-slate-800">
               <div className="mb-1 text-xs uppercase tracking-wide text-slate-400">
                 Or invite by email
               </div>

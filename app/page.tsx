@@ -8,6 +8,7 @@ import CalendarView, {
 } from "@/components/CalendarView";
 import Sidebar from "@/components/Sidebar";
 import EventModal, { EditableEvent } from "@/components/EventModal";
+import ThemeToggle from "@/components/ThemeToggle";
 import { toast } from "sonner";
 
 interface GroupSummary {
@@ -214,7 +215,7 @@ export default function Home() {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
       {/* Desktop: sidebar pushes content. Mobile: slide-in drawer over content. */}
       {!isMobile && sidebarOpen && sidebarEl}
       {isMobile && sidebarOpen && (
@@ -235,7 +236,7 @@ export default function Home() {
             onClick={toggleSidebar}
             aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
             title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-            className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100"
+            className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             <svg
               width="18"
@@ -251,10 +252,13 @@ export default function Home() {
               <line x1="9" y1="4" x2="9" y2="20" />
             </svg>
           </button>
+          <div className="ml-auto">
+            <ThemeToggle />
+          </div>
         </div>
 
         <div className="flex-1 overflow-hidden p-3 pt-2 md:px-5 md:pb-5">
-          <div className="animate-fade-in h-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:p-4">
+          <div className="animate-fade-in h-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:p-4">
             {mounted && (
               <CalendarView
                 ref={calRef}

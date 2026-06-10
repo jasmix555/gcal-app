@@ -38,11 +38,11 @@ interface Props {
 }
 
 const btn =
-  "rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 transition hover:bg-slate-50 disabled:opacity-50";
+  "rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700";
 const btnPrimary =
   "rounded-lg border border-accent bg-accent px-3 py-2 text-sm text-white transition hover:bg-accent-dark disabled:opacity-50";
 const input =
-  "w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-accent";
+  "w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-accent dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500";
 const label = "mb-1 text-xs font-medium uppercase tracking-wide text-slate-400";
 
 function initials(name?: string | null, email?: string | null) {
@@ -181,7 +181,7 @@ export default function Sidebar({
     groups.find((g) => g.id === currentGroupId)?.name || "this group";
 
   return (
-    <aside className="animate-fade-in flex h-full w-[300px] max-w-[85vw] shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-200 bg-white px-4 py-4">
+    <aside className="animate-fade-in flex h-full w-[300px] max-w-[85vw] shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
       <h1 className="text-lg font-semibold">📅 Team Calendar</h1>
 
       {user && (
@@ -244,7 +244,7 @@ export default function Sidebar({
             {members.map((m) => (
               <div
                 key={m.id}
-                className="group flex items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] transition hover:bg-slate-100"
+                className="group flex items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] transition hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 <span
                   className="h-2.5 w-2.5 shrink-0 rounded-full"
@@ -278,7 +278,7 @@ export default function Sidebar({
 
       {currentGroupId && isOwner && (
         <button
-          className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-red-600 transition hover:bg-red-50"
+          className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-red-600 transition hover:bg-red-50 dark:border-red-900/60 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-950/40"
           onClick={() => setConfirmDeleteGroup(true)}
         >
           Delete group
@@ -292,7 +292,7 @@ export default function Sidebar({
             {pending.map((p) => (
               <div
                 key={p.id}
-                className="flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white p-2 text-[13px]"
+                className="flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white p-2 text-[13px] dark:border-slate-700 dark:bg-slate-800"
               >
                 <div>
                   <strong>{p.group.name}</strong> · {p.role}

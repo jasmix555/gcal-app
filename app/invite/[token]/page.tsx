@@ -31,10 +31,10 @@ export default function InvitePage({ params }: { params: { token: string } }) {
   }, [status, params.token]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-      <div className="animate-scale-in flex w-[380px] max-w-full flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-7 shadow-[0_10px_30px_rgba(0,0,0,0.06)]">
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6 dark:bg-slate-950">
+      <div className="animate-scale-in flex w-[380px] max-w-full flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-7 shadow-[0_10px_30px_rgba(0,0,0,0.06)] dark:border-slate-800 dark:bg-slate-900">
         <h1 className="text-xl font-semibold">📅 Team Calendar</h1>
-        <p className="text-sm text-slate-500">{message}</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{message}</p>
       </div>
     </div>
   );

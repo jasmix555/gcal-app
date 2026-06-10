@@ -248,6 +248,49 @@ body {
   }
 }
 
+/* ===========================================================================
+   Dark theme for FullCalendar.
+   ======================================================================== */
+.dark .fc {
+  --fc-border-color: #1e293b;
+  --fc-page-bg-color: #0f172a;
+  --fc-neutral-bg-color: #1e293b;
+  --fc-today-bg-color: rgba(59, 130, 246, 0.16);
+  --fc-now-indicator-color: #f87171;
+  color: #e2e8f0;
+}
+
+.dark .fc .fc-toolbar-title {
+  color: #f1f5f9;
+}
+
+.dark .fc .fc-button {
+  background: #1e293b;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+.dark .fc .fc-button:hover {
+  background: #334155;
+  border-color: #475569;
+}
+
+.dark .fc .fc-col-header-cell {
+  color: #64748b;
+}
+
+.dark .fc .fc-scroller::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
+.dark .fc .fc-list-event:hover td {
+  background: #1e293b;
+}
+
+.dark .fc-theme-standard .fc-list-day-cushion {
+  background: #1e293b;
+}
+
 /* Compact the FullCalendar toolbar on phones so it never overflows. */
 @media (max-width: 767px) {
   .fc .fc-toolbar.fc-header-toolbar {
