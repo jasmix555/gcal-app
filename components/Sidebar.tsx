@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
+import { toast } from "sonner";
 import { colorForKey } from "@/lib/colors";
 import InviteModal from "@/components/InviteModal";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 interface GroupSummary {
   id: string;
@@ -74,8 +76,10 @@ export default function Sidebar({
   const [newGroup, setNewGroup] = useState("");
   const [showInvite, setShowInvite] = useState(false);
   const [pending, setPending] = useState<PendingInvite[]>([]);
+  const [confirmDeleteGroup, setConfirmDeleteGroup] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState<Member | null>(null);
 
-  useEffect(() => {
+  const loadMembers = useCallback(() => {
     if (!currentGroupId) {
       setMembers([]);
       return;
@@ -89,6 +93,8 @@ export default function Sidebar({
       .catch(() => setMembers([]));
   }, [currentGroupId]);
 
+  useEffect(loadMembers, [loadMembers]);
+
   function loadPending() {
     fetch("/api/invitations")
       .then((r) => r.json())
@@ -101,32 +107,76 @@ export default function Sidebar({
     e.preventDefault();
     const name = newGroup.trim();
     if (!name) return;
-    const res = await fetch("/api/groups", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    const d = await res.json();
-    if (!res.ok) return alert(d.error || "Could not create group");
-    setNewGroup("");
-    onGroupsChanged();
-    if (d.group?.id) onSelectGroup(d.group.id);
+    try {
+      const res = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Could not create group");
+      setNewGroup("");
+      toast.success(`Group “${name}” created`);
+      onGroupsChanged();
+      if (d.group?.id) onSelectGroup(d.group.id);
+    } catch (err: any) {
+      toast.error(err.message || "Could not create group");
+    }
   }
 
   async function accept(token: string) {
-    const res = await fetch("/api/invitations/accept", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
-    });
-    const d = await res.json();
-    if (!res.ok) return alert(d.error || "Could not accept invite");
-    loadPending();
-    onGroupsChanged();
-    if (d.groupId) onSelectGroup(d.groupId);
+    try {
+      const res = await fetch("/api/invitations/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Could not accept invite");
+      toast.success("Invitation accepted");
+      loadPending();
+      onGroupsChanged();
+      if (d.groupId) onSelectGroup(d.groupId);
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  }
+
+  async function doRemoveMember(member: Member) {
+    if (!currentGroupId) return;
+    try {
+      const res = await fetch(
+        `/api/groups/${currentGroupId}/members/${member.id}`,
+        { method: "DELETE" }
+      );
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Could not remove member");
+      toast.success(`Removed ${member.name || member.email}`);
+      loadMembers();
+      onGroupsChanged();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  }
+
+  async function doDeleteGroup() {
+    if (!currentGroupId) return;
+    try {
+      const res = await fetch(`/api/groups/${currentGroupId}`, {
+        method: "DELETE",
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Could not delete group");
+      toast.success("Group deleted");
+      onSelectGroup("");
+      onGroupsChanged();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   }
 
   const canInvite = myRole === "OWNER" || myRole === "ADMIN";
+  const isOwner = myRole === "OWNER";
   const currentGroupName =
     groups.find((g) => g.id === currentGroupId)?.name || "this group";
 
@@ -177,7 +227,11 @@ export default function Sidebar({
             onChange={(e) => setNewGroup(e.target.value)}
             placeholder="New group name"
           />
-          <button className={btn} type="submit">
+          <button
+            className={`${btn} disabled:cursor-not-allowed`}
+            type="submit"
+            disabled={!newGroup.trim()}
+          >
             Create
           </button>
         </form>
@@ -190,7 +244,7 @@ export default function Sidebar({
             {members.map((m) => (
               <div
                 key={m.id}
-                className="flex items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] transition hover:bg-slate-100"
+                className="group flex items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] transition hover:bg-slate-100"
               >
                 <span
                   className="h-2.5 w-2.5 shrink-0 rounded-full"
@@ -200,6 +254,16 @@ export default function Sidebar({
                 <span className="ml-auto text-[11px] uppercase text-slate-400">
                   {m.role}
                 </span>
+                {canInvite && m.role !== "OWNER" && (
+                  <button
+                    onClick={() => setMemberToRemove(m)}
+                    title="Remove from group"
+                    aria-label={`Remove ${m.name || m.email}`}
+                    className="ml-1 hidden h-5 w-5 shrink-0 items-center justify-center rounded text-slate-400 transition hover:bg-red-50 hover:text-red-600 group-hover:flex"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -209,6 +273,15 @@ export default function Sidebar({
       {currentGroupId && canInvite && (
         <button className={`${btn} w-full`} onClick={() => setShowInvite(true)}>
           Invite people
+        </button>
+      )}
+
+      {currentGroupId && isOwner && (
+        <button
+          className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-red-600 transition hover:bg-red-50"
+          onClick={() => setConfirmDeleteGroup(true)}
+        >
+          Delete group
         </button>
       )}
 
@@ -252,6 +325,35 @@ export default function Sidebar({
           onClose={() => setShowInvite(false)}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteGroup}
+        onOpenChange={setConfirmDeleteGroup}
+        title={`Delete “${currentGroupName}”?`}
+        description="This permanently removes the group and all of its events for everyone. This can't be undone."
+        confirmLabel="Delete group"
+        onConfirm={() => {
+          setConfirmDeleteGroup(false);
+          doDeleteGroup();
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!memberToRemove}
+        onOpenChange={(o) => !o && setMemberToRemove(null)}
+        title="Remove member?"
+        description={
+          memberToRemove
+            ? `Remove ${memberToRemove.name || memberToRemove.email} from this group?`
+            : ""
+        }
+        confirmLabel="Remove"
+        onConfirm={() => {
+          const m = memberToRemove;
+          setMemberToRemove(null);
+          if (m) doRemoveMember(m);
+        }}
+      />
     </aside>
   );
 }

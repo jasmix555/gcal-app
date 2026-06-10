@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   groupId: string;
@@ -9,7 +17,7 @@ interface Props {
 }
 
 const input =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent";
+  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500";
 
 export default function InviteModal({ groupId, groupName, onClose }: Props) {
   const [link, setLink] = useState("");
@@ -18,7 +26,6 @@ export default function InviteModal({ groupId, groupName, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Email invite (uses the existing per-email endpoint)
   const [email, setEmail] = useState("");
   const [emailMsg, setEmailMsg] = useState<string | null>(null);
 
@@ -40,8 +47,6 @@ export default function InviteModal({ groupId, groupName, onClose }: Props) {
     setTimeout(() => setCopied(false), 1800);
   }
 
-  // Native share sheet on mobile; falls back to copy on desktop browsers
-  // that don't support the Web Share API.
   async function share() {
     const data = {
       title: `Join "${groupName}"`,
@@ -52,7 +57,7 @@ export default function InviteModal({ groupId, groupName, onClose }: Props) {
       try {
         await (navigator as any).share(data);
       } catch {
-        /* user dismissed the share sheet */
+        /* dismissed */
       }
     } else {
       copy();
@@ -79,20 +84,14 @@ export default function InviteModal({ groupId, groupName, onClose }: Props) {
   }
 
   return (
-    <div
-      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="animate-scale-in flex w-[420px] max-w-full flex-col gap-4 rounded-2xl bg-white p-6 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div>
-          <h3 className="text-lg font-semibold">Invite people</h3>
-          <p className="text-sm text-slate-500">
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Invite people</DialogTitle>
+          <DialogDescription>
             Anyone with this link can join <strong>{groupName}</strong>.
-          </p>
-        </div>
+          </DialogDescription>
+        </DialogHeader>
 
         {loading && <p className="text-sm text-slate-500">Loading link…</p>}
         {error && (
@@ -102,8 +101,7 @@ export default function InviteModal({ groupId, groupName, onClose }: Props) {
         )}
 
         {!loading && !error && (
-          <>
-            {/* Group code */}
+          <div className="flex flex-col gap-4">
             <div className="rounded-xl bg-slate-50 p-3 text-center">
               <div className="text-xs uppercase tracking-wide text-slate-400">
                 Group code
@@ -113,22 +111,19 @@ export default function InviteModal({ groupId, groupName, onClose }: Props) {
               </div>
             </div>
 
-            {/* Link + copy */}
             <div className="flex gap-2">
-              <input className={input} readOnly value={link} onFocus={(e) => e.currentTarget.select()} />
-              <button
-                onClick={copy}
-                className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm transition hover:bg-slate-50"
-              >
+              <input
+                className={input}
+                readOnly
+                value={link}
+                onFocus={(e) => e.currentTarget.select()}
+              />
+              <Button variant="outline" onClick={copy}>
                 {copied ? "Copied!" : "Copy"}
-              </button>
+              </Button>
             </div>
 
-            {/* Native share */}
-            <button
-              onClick={share}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-accent bg-accent px-3 py-2.5 text-sm font-medium text-white transition hover:bg-accent-dark"
-            >
+            <Button onClick={share} className="w-full">
               <svg
                 width="16"
                 height="16"
@@ -146,9 +141,8 @@ export default function InviteModal({ groupId, groupName, onClose }: Props) {
                 <line x1="15.4" y1="6.5" x2="8.6" y2="10.5" />
               </svg>
               Share
-            </button>
+            </Button>
 
-            {/* Email invite */}
             <div className="border-t border-slate-200 pt-3">
               <div className="mb-1 text-xs uppercase tracking-wide text-slate-400">
                 Or invite by email
@@ -161,27 +155,17 @@ export default function InviteModal({ groupId, groupName, onClose }: Props) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
-                <button
-                  type="submit"
-                  className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm transition hover:bg-slate-50"
-                >
+                <Button type="submit" variant="outline">
                   Invite
-                </button>
+                </Button>
               </form>
               {emailMsg && (
                 <p className="mt-1.5 text-xs text-slate-500">{emailMsg}</p>
               )}
             </div>
-          </>
+          </div>
         )}
-
-        <button
-          onClick={onClose}
-          className="mt-1 self-end rounded-lg px-3 py-2 text-sm text-slate-500 transition hover:bg-slate-100"
-        >
-          Done
-        </button>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

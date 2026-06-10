@@ -2,6 +2,8 @@
 
 import {
   forwardRef,
+  memo,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -51,8 +53,8 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
   ref
 ) {
   const calRef = useRef<FullCalendar>(null);
-  // Keep latest groupId available to the (stable) events fetcher.
   const groupIdRef = useRef<string | null>(groupId);
+  const [loading, setLoading] = useState(false);
 
   // Phone-width detection (initialised before first paint to pick the view).
   const [isMobile, setIsMobile] = useState(
@@ -68,11 +70,11 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
     return () => mq.removeEventListener("change", apply);
   }, []);
 
-  // Switch to a single-day view on phones, week view on larger screens.
+  // Single-day view on phones, month view on larger screens.
   useEffect(() => {
     calRef.current
       ?.getApi()
-      .changeView(isMobile ? "timeGridDay" : "timeGridWeek");
+      .changeView(isMobile ? "timeGridDay" : "dayGridMonth");
   }, [isMobile]);
 
   useEffect(() => {
@@ -84,112 +86,126 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
     refetch: () => calRef.current?.getApi().refetchEvents(),
   }));
 
-  async function fetchEvents(info: any, success: any, failure: any) {
-    const gid = groupIdRef.current;
-    if (!gid) {
-      success([]);
-      return;
-    }
-    try {
-      const res = await fetch(
-        `/api/events?groupId=${encodeURIComponent(gid)}&timeMin=${encodeURIComponent(
-          info.startStr
-        )}&timeMax=${encodeURIComponent(info.endStr)}`
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load events");
-      success(
-        data.events.map((e: CalendarEvent) => {
-          const color = colorForKey(
-            (e.createdBy as any)?.id || e.createdBy?.email
-          );
-          return {
-            id: e.id,
-            title: e.title,
-            start: e.start,
-            end: e.end,
-            allDay: e.allDay,
-            backgroundColor: color,
-            borderColor: color,
-            textColor: "#ffffff",
-            extendedProps: {
-              description: e.description,
-              location: e.location,
-              createdBy: e.createdBy,
-              updatedBy: e.updatedBy,
-            },
-          };
-        })
-      );
-    } catch (err) {
-      failure(err);
-    }
-  }
+  // Stable reference so re-renders don't make FullCalendar refetch everything.
+  const fetchEvents = useCallback(
+    async (info: any, success: any, failure: any) => {
+      const gid = groupIdRef.current;
+      if (!gid) {
+        success([]);
+        return;
+      }
+      try {
+        const res = await fetch(
+          `/api/events?groupId=${encodeURIComponent(gid)}&timeMin=${encodeURIComponent(
+            info.startStr
+          )}&timeMax=${encodeURIComponent(info.endStr)}`
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load events");
+        success(
+          data.events.map((e: CalendarEvent) => {
+            const color = colorForKey(
+              (e.createdBy as any)?.id || e.createdBy?.email
+            );
+            return {
+              id: e.id,
+              title: e.title,
+              start: e.start,
+              end: e.end,
+              allDay: e.allDay,
+              backgroundColor: color,
+              borderColor: color,
+              textColor: "#ffffff",
+              extendedProps: {
+                description: e.description,
+                location: e.location,
+                createdBy: e.createdBy,
+                updatedBy: e.updatedBy,
+              },
+            };
+          })
+        );
+      } catch (err) {
+        failure(err);
+      }
+    },
+    []
+  );
 
   return (
-    <FullCalendar
-      ref={calRef}
-      plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
-      initialView={isMobile ? "timeGridDay" : "timeGridWeek"}
-      headerToolbar={
-        isMobile
-          ? {
-              left: "prev,next",
-              center: "title",
-              right: "timeGridDay,listWeek",
-            }
-          : {
-              left: "prev,next today",
-              center: "title",
-              right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek",
-            }
-      }
-      nowIndicator
-      editable
-      selectable
-      selectMirror
-      dayMaxEvents
-      height="100%"
-      events={fetchEvents}
-      eventClick={(info) => {
-        const ep = info.event.extendedProps as any;
-        onEventClick({
-          id: info.event.id,
-          title: info.event.title,
-          description: ep.description,
-          location: ep.location,
-          start: info.event.startStr,
-          end: info.event.endStr || info.event.startStr,
-          allDay: info.event.allDay,
-          createdBy: ep.createdBy,
-          updatedBy: ep.updatedBy,
-        });
-      }}
-      select={(info) => {
-        onSelectRange({
-          start: info.startStr,
-          end: info.endStr,
-          allDay: info.allDay,
-        });
-      }}
-      eventDrop={(info) => {
-        onReschedule({
-          id: info.event.id,
-          start: info.event.startStr,
-          end: info.event.endStr || info.event.startStr,
-          allDay: info.event.allDay,
-        });
-      }}
-      eventResize={(info) => {
-        onReschedule({
-          id: info.event.id,
-          start: info.event.startStr,
-          end: info.event.endStr || info.event.startStr,
-          allDay: info.event.allDay,
-        });
-      }}
-    />
+    <div className="relative h-full">
+      {loading && (
+        <div className="pointer-events-none absolute right-2 top-2 z-10 flex items-center gap-1.5 rounded-full bg-slate-900/80 px-3 py-1 text-xs text-white shadow">
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+          Loading…
+        </div>
+      )}
+
+      <FullCalendar
+        ref={calRef}
+        plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
+        loading={(isLoading) => setLoading(isLoading)}
+        initialView={isMobile ? "timeGridDay" : "dayGridMonth"}
+        headerToolbar={
+          isMobile
+            ? {
+                left: "prev,next",
+                center: "title",
+                right: "dayGridMonth,timeGridDay,listWeek",
+              }
+            : {
+                left: "prev,next today",
+                center: "title",
+                right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek",
+              }
+        }
+        nowIndicator
+        editable
+        selectable
+        selectMirror
+        dayMaxEvents
+        height="100%"
+        events={fetchEvents}
+        eventClick={(info) => {
+          const ep = info.event.extendedProps as any;
+          onEventClick({
+            id: info.event.id,
+            title: info.event.title,
+            description: ep.description,
+            location: ep.location,
+            start: info.event.startStr,
+            end: info.event.endStr || info.event.startStr,
+            allDay: info.event.allDay,
+            createdBy: ep.createdBy,
+            updatedBy: ep.updatedBy,
+          });
+        }}
+        select={(info) => {
+          onSelectRange({
+            start: info.startStr,
+            end: info.endStr,
+            allDay: info.allDay,
+          });
+        }}
+        eventDrop={(info) => {
+          onReschedule({
+            id: info.event.id,
+            start: info.event.startStr,
+            end: info.event.endStr || info.event.startStr,
+            allDay: info.event.allDay,
+          });
+        }}
+        eventResize={(info) => {
+          onReschedule({
+            id: info.event.id,
+            start: info.event.startStr,
+            end: info.event.endStr || info.event.startStr,
+            allDay: info.event.allDay,
+          });
+        }}
+      />
+    </div>
   );
 });
 
-export default CalendarView;
+export default memo(CalendarView);

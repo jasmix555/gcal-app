@@ -18,7 +18,9 @@ export async function GET(
     where: { id: params.id },
     include: {
       memberships: {
-        include: { user: { select: { id: true, name: true, email: true, image: true } } },
+        include: {
+          user: { select: { id: true, name: true, email: true, image: true } },
+        },
         orderBy: { createdAt: "asc" },
       },
     },
@@ -40,4 +42,24 @@ export async function GET(
       role: m.role,
     })),
   });
+}
+
+/** DELETE /api/groups/:id — owner only. Cascade-removes members/events/invites. */
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const membership = await getMembership(params.id);
+  if (!membership) {
+    return NextResponse.json({ error: "Not a member" }, { status: 403 });
+  }
+  if (membership.role !== "OWNER") {
+    return NextResponse.json(
+      { error: "Only the group owner can delete the group." },
+      { status: 403 }
+    );
+  }
+
+  await prisma.group.delete({ where: { id: params.id } });
+  return NextResponse.json({ ok: true });
 }

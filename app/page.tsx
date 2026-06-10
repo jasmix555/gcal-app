@@ -8,6 +8,7 @@ import CalendarView, {
 } from "@/components/CalendarView";
 import Sidebar from "@/components/Sidebar";
 import EventModal, { EditableEvent } from "@/components/EventModal";
+import { toast } from "sonner";
 
 interface GroupSummary {
   id: string;
@@ -71,6 +72,10 @@ export default function Home() {
   }
 
   function openNewEvent() {
+    if (!currentGroupId) {
+      toast("Create or pick a group first (left sidebar) to add events.");
+      return;
+    }
     const start = new Date();
     start.setMinutes(0, 0, 0);
     setModalEvent({
@@ -82,15 +87,38 @@ export default function Home() {
     setCanDelete(false);
   }
 
-  function openExisting(ev: CalendarEvent) {
-    setModalEvent(ev);
-    const privileged = currentRole === "OWNER" || currentRole === "ADMIN";
-    const isCreator = (ev.createdBy as any)?.id === myId;
-    setCanDelete(privileged || isCreator);
-  }
+  const openExisting = useCallback(
+    (ev: CalendarEvent) => {
+      setModalEvent(ev);
+      const privileged = currentRole === "OWNER" || currentRole === "ADMIN";
+      const isCreator = (ev.createdBy as any)?.id === myId;
+      setCanDelete(privileged || isCreator);
+    },
+    [currentRole, myId]
+  );
+
+  const handleSelectRange = useCallback(
+    (range: { start: string; end: string; allDay: boolean }) => {
+      if (!currentGroupId) {
+        toast("Create or pick a group first (left sidebar) to add events.");
+        return;
+      }
+      setModalEvent({
+        title: "",
+        start: range.start,
+        end: range.end,
+        allDay: range.allDay,
+      });
+      setCanDelete(false);
+    },
+    [currentGroupId]
+  );
 
   async function handleSave(e: EditableEvent) {
-    if (!currentGroupId) return;
+    if (!currentGroupId) {
+      toast("Create or pick a group first (left sidebar) to add events.");
+      return;
+    }
     setSaving(true);
     try {
       if (e.id) {
@@ -113,14 +141,13 @@ export default function Home() {
       setModalEvent(null);
       refetch();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this event?")) return;
     setSaving(true);
     try {
       const res = await fetch(`/api/events/${id}`, { method: "DELETE" });
@@ -128,31 +155,34 @@ export default function Home() {
       setModalEvent(null);
       refetch();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleReschedule(e: {
-    id: string;
-    start: string;
-    end: string;
-    allDay: boolean;
-  }) {
-    try {
-      const res = await fetch(`/api/events/${e.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ start: e.start, end: e.end, allDay: e.allDay }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "Update failed");
-      refetch();
-    } catch (err: any) {
-      alert(err.message);
-      refetch();
-    }
-  }
+  const handleReschedule = useCallback(
+    async (e: { id: string; start: string; end: string; allDay: boolean }) => {
+      try {
+        const res = await fetch(`/api/events/${e.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            start: e.start,
+            end: e.end,
+            allDay: e.allDay,
+          }),
+        });
+        if (!res.ok)
+          throw new Error((await res.json()).error || "Update failed");
+        calRef.current?.refetch();
+      } catch (err: any) {
+        toast.error(err.message);
+        calRef.current?.refetch();
+      }
+    },
+    []
+  );
 
   if (status === "loading") {
     return (
@@ -230,15 +260,7 @@ export default function Home() {
                 ref={calRef}
                 groupId={currentGroupId}
                 onEventClick={openExisting}
-                onSelectRange={(range) => {
-                  setModalEvent({
-                    title: "",
-                    start: range.start,
-                    end: range.end,
-                    allDay: range.allDay,
-                  });
-                  setCanDelete(false);
-                }}
+                onSelectRange={handleSelectRange}
                 onReschedule={handleReschedule}
               />
             )}

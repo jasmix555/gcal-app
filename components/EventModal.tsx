@@ -1,6 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 export interface EditableEvent {
   id?: string;
@@ -30,7 +40,7 @@ interface Props {
 }
 
 const input =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent";
+  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500";
 const label = "mb-1 block text-xs font-medium text-slate-500";
 
 function toLocalInput(value: string, allDay?: boolean) {
@@ -56,6 +66,7 @@ export default function EventModal({
 }: Props) {
   const [form, setForm] = useState<EditableEvent>(event);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     setForm({
@@ -84,7 +95,7 @@ export default function EventModal({
 
   function handleSave() {
     if (!form.title.trim()) {
-      alert("Please enter a title.");
+      toast.error("Please enter a title.");
       return;
     }
     onSave({
@@ -99,128 +110,131 @@ export default function EventModal({
   }
 
   return (
-    <div
-      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="animate-scale-in flex max-h-[calc(100vh-3rem)] w-[440px] max-w-full flex-col gap-3.5 overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-lg font-semibold">
-          {isEdit ? "Edit event" : "New event"}
-        </h3>
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{isEdit ? "Edit event" : "New event"}</DialogTitle>
+        </DialogHeader>
 
-        <div>
-          <label className={label}>Title</label>
-          <input
-            autoFocus
-            className={input}
-            value={form.title}
-            onChange={(e) => update("title", e.target.value)}
-            placeholder="Add a title"
-          />
-        </div>
-
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={!!form.allDay}
-            onChange={(e) => update("allDay", e.target.checked)}
-          />
-          All day
-        </label>
-
-        <div className="flex flex-col gap-2.5 sm:flex-row">
-          <div className="flex-1">
-            <label className={label}>Start</label>
+        <div className="flex flex-col gap-3.5">
+          <div>
+            <label className={label}>Title</label>
             <input
+              autoFocus
               className={input}
-              type={form.allDay ? "date" : "datetime-local"}
-              value={form.start}
-              onChange={(e) => update("start", e.target.value)}
+              value={form.title}
+              onChange={(e) => update("title", e.target.value)}
+              placeholder="Add a title"
             />
           </div>
-          <div className="flex-1">
-            <label className={label}>End</label>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={!!form.allDay}
+              onChange={(e) => update("allDay", e.target.checked)}
+            />
+            All day
+          </label>
+
+          <div className="flex flex-col gap-2.5 sm:flex-row">
+            <div className="flex-1">
+              <label className={label}>Start</label>
+              <input
+                className={input}
+                type={form.allDay ? "date" : "datetime-local"}
+                value={form.start}
+                onChange={(e) => update("start", e.target.value)}
+              />
+            </div>
+            <div className="flex-1">
+              <label className={label}>End</label>
+              <input
+                className={input}
+                type={form.allDay ? "date" : "datetime-local"}
+                value={form.end}
+                onChange={(e) => update("end", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className={label}>Location</label>
             <input
               className={input}
-              type={form.allDay ? "date" : "datetime-local"}
-              value={form.end}
-              onChange={(e) => update("end", e.target.value)}
+              value={form.location || ""}
+              onChange={(e) => update("location", e.target.value)}
+              placeholder="Optional"
             />
           </div>
-        </div>
 
-        <div>
-          <label className={label}>Location</label>
-          <input
-            className={input}
-            value={form.location || ""}
-            onChange={(e) => update("location", e.target.value)}
-            placeholder="Optional"
-          />
-        </div>
-
-        <div>
-          <label className={label}>Description</label>
-          <textarea
-            className={`${input} min-h-[64px] resize-y`}
-            value={form.description || ""}
-            onChange={(e) => update("description", e.target.value)}
-            placeholder="Optional"
-          />
-        </div>
-
-        {isEdit && (
-          <div className="flex flex-col gap-1 border-t border-slate-200 pt-2.5 text-xs text-slate-500">
-            <div>Created by {who(form.createdBy)}</div>
-            {form.updatedBy && <div>Last edited by {who(form.updatedBy)}</div>}
-            {activities.length > 0 && (
-              <>
-                <div className="mt-1 font-semibold">History</div>
-                {activities.slice(0, 6).map((a, i) => (
-                  <div key={i} className="flex gap-1.5">
-                    <span>{who(a.user)}</span>
-                    <span>{a.action}</span>
-                    <span>· {new Date(a.createdAt).toLocaleString()}</span>
-                  </div>
-                ))}
-              </>
-            )}
+          <div>
+            <label className={label}>Description</label>
+            <textarea
+              className={`${input} min-h-[64px] resize-y`}
+              value={form.description || ""}
+              onChange={(e) => update("description", e.target.value)}
+              placeholder="Optional"
+            />
           </div>
-        )}
 
-        <div className="mt-1 flex items-center justify-between gap-2">
+          {isEdit && (
+            <div className="flex flex-col gap-1 border-t border-slate-200 pt-2.5 text-xs text-slate-500">
+              <div>Created by {who(form.createdBy)}</div>
+              {form.updatedBy && (
+                <div>Last edited by {who(form.updatedBy)}</div>
+              )}
+              {activities.length > 0 && (
+                <>
+                  <div className="mt-1 font-semibold">History</div>
+                  {activities.slice(0, 6).map((a, i) => (
+                    <div key={i} className="flex gap-1.5">
+                      <span>{who(a.user)}</span>
+                      <span>{a.action}</span>
+                      <span>· {new Date(a.createdAt).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="sm:justify-between">
           {isEdit && canDelete && onDelete ? (
-            <button
-              className="rounded-lg border border-red-500 bg-white px-3 py-2 text-sm text-red-500 transition hover:bg-red-50 disabled:opacity-50"
-              onClick={() => onDelete(form.id as string)}
+            <Button
+              variant="outline"
+              className="border-red-300 text-red-600 hover:bg-red-50 sm:mr-auto"
+              onClick={() => setConfirmDelete(true)}
               disabled={saving}
             >
               Delete
-            </button>
+            </Button>
           ) : (
             <span />
           )}
           <div className="flex gap-2">
-            <button
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm transition hover:bg-slate-50 disabled:opacity-50"
-              onClick={onClose}
-              disabled={saving}
-            >
+            <Button variant="outline" onClick={onClose} disabled={saving}>
               Cancel
-            </button>
-            <button
-              className="rounded-lg border border-accent bg-accent px-3 py-2 text-sm text-white transition hover:bg-accent-dark disabled:opacity-50"
-              onClick={handleSave}
-              disabled={saving}
-            >
+            </Button>
+            <Button onClick={handleSave} disabled={saving}>
               {saving ? "Saving…" : "Save"}
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Delete this event?"
+        description="This permanently removes the event for everyone in the group."
+        confirmLabel="Delete"
+        onConfirm={() => {
+          setConfirmDelete(false);
+          if (form.id && onDelete) onDelete(form.id);
+        }}
+      />
+    </Dialog>
   );
 }
