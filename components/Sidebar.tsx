@@ -41,14 +41,19 @@ const btnPrimary =
   "rounded-lg border border-accent bg-accent px-3 py-2 text-sm text-white transition hover:bg-accent-dark disabled:opacity-50";
 const input =
   "w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-accent";
-const label =
-  "mb-1 text-xs font-medium uppercase tracking-wide text-slate-400";
+const label = "mb-1 text-xs font-medium uppercase tracking-wide text-slate-400";
 
 function initials(name?: string | null, email?: string | null) {
   return (name || email || "?").slice(0, 2).toUpperCase();
 }
 
-function Avatar({ name, email }: { name?: string | null; email?: string | null }) {
+function Avatar({
+  name,
+  email,
+}: {
+  name?: string | null;
+  email?: string | null;
+}) {
   return (
     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-blue-900">
       {initials(name, email)}
@@ -126,7 +131,7 @@ export default function Sidebar({
     groups.find((g) => g.id === currentGroupId)?.name || "this group";
 
   return (
-    <aside className="animate-fade-in flex w-[300px] shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-200 bg-white px-4 py-4">
+    <aside className="animate-fade-in flex h-full w-[300px] max-w-[85vw] shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-200 bg-white px-4 py-4">
       <h1 className="text-lg font-semibold">📅 Team Calendar</h1>
 
       {user && (

@@ -5,6 +5,7 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
 } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -32,7 +33,11 @@ export interface CalendarEvent {
 interface Props {
   groupId: string | null;
   onEventClick: (e: CalendarEvent) => void;
-  onSelectRange: (range: { start: string; end: string; allDay: boolean }) => void;
+  onSelectRange: (range: {
+    start: string;
+    end: string;
+    allDay: boolean;
+  }) => void;
   onReschedule: (e: {
     id: string;
     start: string;
@@ -48,6 +53,27 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
   const calRef = useRef<FullCalendar>(null);
   // Keep latest groupId available to the (stable) events fetcher.
   const groupIdRef = useRef<string | null>(groupId);
+
+  // Phone-width detection (initialised before first paint to pick the view).
+  const [isMobile, setIsMobile] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 767px)").matches
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setIsMobile(mq.matches);
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  // Switch to a single-day view on phones, week view on larger screens.
+  useEffect(() => {
+    calRef.current
+      ?.getApi()
+      .changeView(isMobile ? "timeGridDay" : "timeGridWeek");
+  }, [isMobile]);
 
   useEffect(() => {
     groupIdRef.current = groupId;
@@ -104,12 +130,20 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
     <FullCalendar
       ref={calRef}
       plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
-      initialView="timeGridWeek"
-      headerToolbar={{
-        left: "prev,next today",
-        center: "title",
-        right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek",
-      }}
+      initialView={isMobile ? "timeGridDay" : "timeGridWeek"}
+      headerToolbar={
+        isMobile
+          ? {
+              left: "prev,next",
+              center: "title",
+              right: "timeGridDay,listWeek",
+            }
+          : {
+              left: "prev,next today",
+              center: "title",
+              right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek",
+            }
+      }
       nowIndicator
       editable
       selectable

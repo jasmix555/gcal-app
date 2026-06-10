@@ -75,7 +75,10 @@ export default function EventModal({
 
   const isEdit = Boolean(form.id);
 
-  function update<K extends keyof EditableEvent>(key: K, val: EditableEvent[K]) {
+  function update<K extends keyof EditableEvent>(
+    key: K,
+    val: EditableEvent[K]
+  ) {
     setForm((f) => ({ ...f, [key]: val }));
   }
 
@@ -89,7 +92,9 @@ export default function EventModal({
       start: form.allDay
         ? form.start.slice(0, 10)
         : new Date(form.start).toISOString(),
-      end: form.allDay ? form.end.slice(0, 10) : new Date(form.end).toISOString(),
+      end: form.allDay
+        ? form.end.slice(0, 10)
+        : new Date(form.end).toISOString(),
     });
   }
 
@@ -126,7 +131,7 @@ export default function EventModal({
           All day
         </label>
 
-        <div className="flex gap-2.5">
+        <div className="flex flex-col gap-2.5 sm:flex-row">
           <div className="flex-1">
             <label className={label}>Start</label>
             <input

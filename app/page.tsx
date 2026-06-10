@@ -27,13 +27,19 @@ export default function Home() {
   const [canDelete, setCanDelete] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    // Auto-collapse the sidebar on small screens (phones / narrow windows).
-    if (typeof window !== "undefined" && window.innerWidth < 768) {
-      setSidebarOpen(false);
-    }
+    // Track phone-width screens; collapse the sidebar by default there.
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => {
+      setIsMobile(mq.matches);
+      setSidebarOpen(!mq.matches);
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
   }, []);
 
   // FullCalendar sizes to its container; nudge it to refit after the sidebar
@@ -160,17 +166,37 @@ export default function Home() {
     return null;
   }
 
+  const sidebarEl = (
+    <Sidebar
+      user={session?.user}
+      groups={groups}
+      currentGroupId={currentGroupId}
+      onSelectGroup={(id) => {
+        setCurrentGroupId(id);
+        if (isMobile) setSidebarOpen(false);
+      }}
+      onGroupsChanged={loadGroups}
+      onNewEvent={() => {
+        openNewEvent();
+        if (isMobile) setSidebarOpen(false);
+      }}
+    />
+  );
+
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
-      {sidebarOpen && (
-        <Sidebar
-          user={session?.user}
-          groups={groups}
-          currentGroupId={currentGroupId}
-          onSelectGroup={(id) => setCurrentGroupId(id)}
-          onGroupsChanged={loadGroups}
-          onNewEvent={openNewEvent}
-        />
+      {/* Desktop: sidebar pushes content. Mobile: slide-in drawer over content. */}
+      {!isMobile && sidebarOpen && sidebarEl}
+      {isMobile && sidebarOpen && (
+        <>
+          <div
+            className="animate-fade-in fixed inset-0 z-30 bg-black/40 backdrop-blur-sm"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <div className="animate-slide-in-left fixed inset-y-0 left-0 z-40 shadow-2xl">
+            {sidebarEl}
+          </div>
+        </>
       )}
 
       <main className="flex flex-1 flex-col overflow-hidden">

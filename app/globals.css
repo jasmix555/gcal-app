@@ -212,6 +212,19 @@ body {
   }
 }
 
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 .animate-fade-in {
   animation: fadeIn 0.18s ease both;
 }
@@ -228,8 +241,29 @@ body {
   .animate-fade-in,
   .animate-scale-in,
   .animate-rise-in,
+  .animate-slide-in-left,
   .fc .fc-event {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* Compact the FullCalendar toolbar on phones so it never overflows. */
+@media (max-width: 767px) {
+  .fc .fc-toolbar.fc-header-toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 0.75rem;
+  }
+  .fc .fc-toolbar-title {
+    font-size: 0.95rem;
+  }
+  .fc .fc-button {
+    padding: 0.3rem 0.55rem;
+    font-size: 0.75rem;
+  }
+  /* Roomier tap targets for events on touch screens. */
+  .fc .fc-event {
+    padding: 2px 3px;
   }
 }
