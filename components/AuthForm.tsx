@@ -19,10 +19,28 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
   const [callbackUrl, setCallbackUrl] = useState("/");
 
   useEffect(() => {
-    getProviders().then((p) => setGoogleEnabled(Boolean(p && (p as any).google)));
+    getProviders().then((p) =>
+      setGoogleEnabled(Boolean(p && (p as any).google))
+    );
     const params = new URLSearchParams(window.location.search);
     setCallbackUrl(params.get("callbackUrl") || "/");
   }, []);
+
+  async function handleDemo() {
+    setError(null);
+    setLoading(true);
+    const result = await signIn("credentials", {
+      email: "demo@demo.com",
+      password: "demodemo",
+      redirect: false,
+    });
+    if (result?.error) {
+      setError("Demo account isn't seeded yet. Run: npx prisma db seed");
+      setLoading(false);
+      return;
+    }
+    window.location.href = "/";
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -98,7 +116,9 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={isRegister ? "At least 8 characters" : "Your password"}
+              placeholder={
+                isRegister ? "At least 8 characters" : "Your password"
+              }
             />
           </div>
           <button
@@ -106,20 +126,34 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
             type="submit"
             disabled={loading}
           >
-            {loading ? "Please wait…" : isRegister ? "Create account" : "Sign in"}
+            {loading
+              ? "Please wait…"
+              : isRegister
+                ? "Create account"
+                : "Sign in"}
           </button>
         </form>
 
         {googleEnabled && (
+          <button
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm transition hover:bg-slate-50"
+            onClick={() => signIn("google", { callbackUrl })}
+          >
+            Continue with Google
+          </button>
+        )}
+
+        {!isRegister && (
           <>
             <div className="flex items-center gap-2.5 text-xs text-slate-400 before:h-px before:flex-1 before:bg-slate-200 after:h-px after:flex-1 after:bg-slate-200">
-              or
+              just exploring?
             </div>
             <button
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm transition hover:bg-slate-50"
-              onClick={() => signIn("google", { callbackUrl })}
+              className="w-full rounded-lg border border-dashed border-accent bg-accent-soft px-3 py-2 text-sm font-medium text-blue-900 transition hover:bg-blue-100 disabled:opacity-50"
+              onClick={handleDemo}
+              disabled={loading}
             >
-              Continue with Google
+              Try the demo (no signup)
             </button>
           </>
         )}

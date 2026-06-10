@@ -1,5 +1,5 @@
 // Prisma schema for the team calendar app.
-// Database: MySQL (XAMPP / MariaDB compatible).
+// Database: PostgreSQL (e.g. Neon). Swappable via DATABASE_URL.
 
 generator client {
   provider = "prisma-client-js"
