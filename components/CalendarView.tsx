@@ -14,7 +14,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
-import { colorForKey } from "@/lib/colors";
+import { colorForKey, readableText } from "@/lib/colors";
 
 export interface CalendarHandle {
   refetch: () => void;
@@ -25,6 +25,7 @@ export interface CalendarEvent {
   title: string;
   description?: string;
   location?: string;
+  color?: string | null;
   start: string;
   end: string;
   allDay: boolean;
@@ -104,9 +105,10 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
         if (!res.ok) throw new Error(data.error || "Failed to load events");
         success(
           data.events.map((e: CalendarEvent) => {
-            const color = colorForKey(
-              (e.createdBy as any)?.id || e.createdBy?.email
-            );
+            // Use the event's chosen color, else fall back to the creator color.
+            const color =
+              e.color ||
+              colorForKey((e.createdBy as any)?.id || e.createdBy?.email);
             return {
               id: e.id,
               title: e.title,
@@ -115,10 +117,11 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
               allDay: e.allDay,
               backgroundColor: color,
               borderColor: color,
-              textColor: "#ffffff",
+              textColor: readableText(color),
               extendedProps: {
                 description: e.description,
                 location: e.location,
+                color: e.color || null,
                 createdBy: e.createdBy,
                 updatedBy: e.updatedBy,
               },
@@ -173,6 +176,7 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
             title: info.event.title,
             description: ep.description,
             location: ep.location,
+            color: ep.color,
             start: info.event.startStr,
             end: info.event.endStr || info.event.startStr,
             allDay: info.event.allDay,

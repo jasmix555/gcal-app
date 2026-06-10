@@ -1,0 +1,245 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+
+interface Props {
+  value: string; // "YYYY-MM-DDTHH:mm" (timed) or "YYYY-MM-DD" (all day)
+  allDay?: boolean;
+  onChange: (v: string) => void;
+}
+
+const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+function parse(value: string, allDay?: boolean): Date {
+  const now = new Date();
+  if (!value) return now;
+  const [datePart, timePart = ""] = value.split("T");
+  const [y, m, d] = datePart.split("-").map(Number);
+  const date = new Date(y || now.getFullYear(), (m || 1) - 1, d || 1);
+  if (!allDay && timePart) {
+    const [hh, mm] = timePart.split(":").map(Number);
+    date.setHours(hh || 0, mm || 0, 0, 0);
+  }
+  return date;
+}
+
+function toValue(date: Date, allDay?: boolean): string {
+  const base = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return allDay
+    ? base
+    : `${base}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+const trigger =
+  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-900 outline-none transition hover:border-slate-300 focus:border-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-600";
+
+export default function DateTimeField({ value, allDay, onChange }: Props) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const selected = parse(value, allDay);
+  const [view, setView] = useState(
+    () => new Date(selected.getFullYear(), selected.getMonth(), 1)
+  );
+
+  const popWidth = allDay ? 252 : 344;
+
+  function updateCoords() {
+    const el = wrapRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const left = Math.max(
+      8,
+      Math.min(r.left, window.innerWidth - popWidth - 8)
+    );
+    setCoords({ top: r.bottom + 4, left });
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    updateCoords();
+    setView(new Date(selected.getFullYear(), selected.getMonth(), 1));
+    const reposition = () => updateCoords();
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    function onDoc(e: MouseEvent) {
+      const t = e.target as Node;
+      if (wrapRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => {
+      window.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("resize", reposition);
+      document.removeEventListener("mousedown", onDoc);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const times = useMemo(() => {
+    const list: { h: number; m: number }[] = [];
+    for (let h = 0; h < 24; h++) for (const m of [0, 30]) list.push({ h, m });
+    return list;
+  }, []);
+
+  const year = view.getFullYear();
+  const month = view.getMonth();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: (number | null)[] = [
+    ...Array(firstWeekday).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+
+  function pickDay(day: number) {
+    const next = new Date(selected);
+    next.setFullYear(year, month, day);
+    onChange(toValue(next, allDay));
+    if (allDay) setOpen(false);
+  }
+  function pickTime(h: number, m: number) {
+    const next = new Date(selected);
+    next.setHours(h, m, 0, 0);
+    onChange(toValue(next, false));
+  }
+
+  const today = new Date();
+  const dateLabel = selected.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const display = allDay
+    ? dateLabel
+    : `${dateLabel} · ${pad(selected.getHours())}:${pad(selected.getMinutes())}`;
+
+  return (
+    <div ref={wrapRef}>
+      <button
+        type="button"
+        className={trigger}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {display}
+      </button>
+
+      {open &&
+        createPortal(
+          <div
+            ref={popRef}
+            data-dt-popover
+            style={{ position: "fixed", top: coords.top, left: coords.left }}
+            className="animate-rise-in z-[60] flex gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-800"
+          >
+            {/* Calendar */}
+            <div className="w-56">
+              <div className="mb-2 flex items-center justify-between">
+                <button
+                  type="button"
+                  className="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  onClick={() => setView(new Date(year, month - 1, 1))}
+                >
+                  ‹
+                </button>
+                <span className="text-sm font-medium">
+                  {MONTHS[month]} {year}
+                </span>
+                <button
+                  type="button"
+                  className="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
+                  onClick={() => setView(new Date(year, month + 1, 1))}
+                >
+                  ›
+                </button>
+              </div>
+
+              <div className="grid grid-cols-7 gap-0.5 text-center text-[11px] text-slate-400">
+                {WEEKDAYS.map((d) => (
+                  <div key={d} className="py-1">
+                    {d}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-0.5">
+                {cells.map((day, i) => {
+                  if (day === null) return <div key={i} />;
+                  const isSelected =
+                    selected.getFullYear() === year &&
+                    selected.getMonth() === month &&
+                    selected.getDate() === day;
+                  const isToday =
+                    today.getFullYear() === year &&
+                    today.getMonth() === month &&
+                    today.getDate() === day;
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => pickDay(day)}
+                      className={`flex h-8 w-8 items-center justify-center rounded-full text-sm transition ${
+                        isSelected
+                          ? "bg-blue-600 text-white"
+                          : isToday
+                            ? "font-semibold text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+                            : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Time scroll list */}
+            {!allDay && (
+              <div className="max-h-[244px] w-20 overflow-y-auto border-l border-slate-200 pl-2 dark:border-slate-700">
+                {times.map(({ h, m }) => {
+                  const active =
+                    selected.getHours() === h && selected.getMinutes() === m;
+                  return (
+                    <button
+                      key={`${h}:${m}`}
+                      type="button"
+                      ref={(el) => {
+                        if (active && el && open)
+                          el.scrollIntoView({ block: "nearest" });
+                      }}
+                      onClick={() => pickTime(h, m)}
+                      className={`block w-full rounded-md px-2 py-1 text-center text-sm transition ${
+                        active
+                          ? "bg-blue-600 text-white"
+                          : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
+                      }`}
+                    >
+                      {pad(h)}:{pad(m)}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>,
+          document.body
+        )}
+    </div>
+  );
+}

@@ -18,6 +18,12 @@ interface GroupSummary {
   memberCount: number;
 }
 
+// Safely read an error message even if the response body is empty/non-JSON.
+async function errorMessage(res: Response, fallback: string) {
+  const data = await res.json().catch(() => null);
+  return data?.error || fallback;
+}
+
 export default function Home() {
   const { data: session, status } = useSession();
   const calRef = useRef<CalendarHandle>(null);
@@ -128,16 +134,14 @@ export default function Home() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(e),
         });
-        if (!res.ok)
-          throw new Error((await res.json()).error || "Update failed");
+        if (!res.ok) throw new Error(await errorMessage(res, "Update failed"));
       } else {
         const res = await fetch("/api/events", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...e, groupId: currentGroupId }),
         });
-        if (!res.ok)
-          throw new Error((await res.json()).error || "Create failed");
+        if (!res.ok) throw new Error(await errorMessage(res, "Create failed"));
       }
       setModalEvent(null);
       refetch();
@@ -152,7 +156,7 @@ export default function Home() {
     setSaving(true);
     try {
       const res = await fetch(`/api/events/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error((await res.json()).error || "Delete failed");
+      if (!res.ok) throw new Error(await errorMessage(res, "Delete failed"));
       setModalEvent(null);
       refetch();
     } catch (err: any) {
@@ -174,8 +178,7 @@ export default function Home() {
             allDay: e.allDay,
           }),
         });
-        if (!res.ok)
-          throw new Error((await res.json()).error || "Update failed");
+        if (!res.ok) throw new Error(await errorMessage(res, "Update failed"));
         calRef.current?.refetch();
       } catch (err: any) {
         toast.error(err.message);

@@ -130,6 +130,7 @@ model Event {
   title       String
   description String?  @db.Text
   location    String?
+  color       String? // hex chosen by the user (pastel palette); null = creator color
   start       DateTime
   end         DateTime
   allDay      Boolean  @default(false)

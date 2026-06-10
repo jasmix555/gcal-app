@@ -177,6 +177,12 @@ export default function Sidebar({
 
   const canInvite = myRole === "OWNER" || myRole === "ADMIN";
   const isOwner = myRole === "OWNER";
+
+  // Only disambiguate with a count when two groups share the exact same name.
+  const nameCounts = groups.reduce<Record<string, number>>((acc, g) => {
+    acc[g.name] = (acc[g.name] || 0) + 1;
+    return acc;
+  }, {});
   const currentGroupName =
     groups.find((g) => g.id === currentGroupId)?.name || "this group";
 
@@ -216,7 +222,8 @@ export default function Sidebar({
           {groups.length === 0 && <option value="">No groups yet</option>}
           {groups.map((g) => (
             <option key={g.id} value={g.id}>
-              {g.name} ({g.memberCount})
+              {g.name}
+              {nameCounts[g.name] > 1 ? ` (${g.memberCount} members)` : ""}
             </option>
           ))}
         </select>
