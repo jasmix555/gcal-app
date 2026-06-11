@@ -8,6 +8,43 @@ body {
 }
 
 /* ===========================================================================
+   Slim, theme-colored scrollbars (replaces the chunky OS default).
+   ======================================================================== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent; /* thumb, track */
+}
+.dark * {
+  scrollbar-color: #475569 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  background-clip: content-box;
+}
+.dark *::-webkit-scrollbar-thumb {
+  background: #475569;
+  background-clip: content-box;
+}
+.dark *::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+  background-clip: content-box;
+}
+
+/* ===========================================================================
    FullCalendar — modern, soft, Google-Calendar-style theme.
    Mostly driven by FullCalendar's own CSS variables.
    ======================================================================== */

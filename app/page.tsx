@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
+import { useTheme } from "next-themes";
 import CalendarView, {
   CalendarHandle,
   CalendarEvent,
@@ -12,6 +13,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell from "@/components/NotificationBell";
 import NotesPanel from "@/components/NotesPanel";
 import FindTimeModal from "@/components/FindTimeModal";
+import CommandPalette, { Command } from "@/components/CommandPalette";
 import {
   Dialog,
   DialogContent,
@@ -51,7 +53,9 @@ async function errorMessage(res: Response, fallback: string) {
 
 export default function Home() {
   const { data: session, status } = useSession();
+  const { theme, setTheme } = useTheme();
   const calRef = useRef<CalendarHandle>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const [mounted, setMounted] = useState(false);
   const [groups, setGroups] = useState<GroupSummary[]>([]);
@@ -70,6 +74,7 @@ export default function Home() {
   const [findOpen, setFindOpen] = useState(false);
   const [focusMemo, setFocusMemo] = useState<string | null>(null);
   const [live, setLive] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   // When a calendar date is clicked/dragged, ask whether to add an event or a
   // note (instead of jumping straight into the event composer).
   const [addChoice, setAddChoice] = useState<{
@@ -181,6 +186,18 @@ export default function Home() {
       setLive(false);
     };
   }, [status, visibleKey]);
+
+  // ⌘K / Ctrl+K toggles the command palette.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const myId = (session?.user as any)?.id as string | undefined;
   const defaultGroupId =
@@ -335,6 +352,109 @@ export default function Home() {
     return null;
   }
 
+  function openNewNote() {
+    setFocusMemo(null);
+    setNotesCompose({});
+    setNotesOpen(true);
+  }
+
+  const paletteCommands: Command[] = [
+    {
+      id: "new-event",
+      label: "New event",
+      icon: "📅",
+      hint: "create",
+      keywords: "add create event",
+      run: openNewEvent,
+    },
+    {
+      id: "new-note",
+      label: "New note",
+      icon: "📝",
+      hint: "create",
+      keywords: "memo todo deadline",
+      run: openNewNote,
+    },
+    {
+      id: "find-time",
+      label: "Find a time",
+      icon: "🕐",
+      keywords: "schedule meeting availability free",
+      run: () => setFindOpen(true),
+    },
+    {
+      id: "open-notes",
+      label: "Open notes",
+      icon: "🗒️",
+      keywords: "memos",
+      run: () => {
+        setFocusMemo(null);
+        setNotesCompose(null);
+        setNotesOpen(true);
+      },
+    },
+    {
+      id: "today",
+      label: "Go to today",
+      icon: "📆",
+      keywords: "now jump",
+      run: () => calRef.current?.today(),
+    },
+    {
+      id: "view-month",
+      label: "Month view",
+      icon: "▦",
+      keywords: "calendar view",
+      run: () => calRef.current?.view("dayGridMonth"),
+    },
+    {
+      id: "view-week",
+      label: "Week view",
+      icon: "▤",
+      keywords: "calendar view",
+      run: () => calRef.current?.view("timeGridWeek"),
+    },
+    {
+      id: "view-day",
+      label: "Day view",
+      icon: "▥",
+      keywords: "calendar view",
+      run: () => calRef.current?.view("timeGridDay"),
+    },
+    {
+      id: "view-list",
+      label: "List view",
+      icon: "☰",
+      keywords: "agenda calendar view",
+      run: () => calRef.current?.view("listMonth"),
+    },
+    {
+      id: "theme",
+      label:
+        theme === "dark" ? "Switch to light theme" : "Switch to dark theme",
+      icon: theme === "dark" ? "☀️" : "🌙",
+      keywords: "dark light mode appearance",
+      run: () => setTheme(theme === "dark" ? "light" : "dark"),
+    },
+    // Toggle each calendar's visibility.
+    ...groups.map((g) => ({
+      id: `toggle-${g.id}`,
+      label: `${visibleIds.includes(g.id) ? "Hide" : "Show"} ${
+        g.isPersonal ? "Personal" : g.name
+      }`,
+      icon: "◑",
+      keywords: "calendar toggle visibility show hide",
+      run: () => toggleVisible(g.id),
+    })),
+    {
+      id: "signout",
+      label: "Sign out",
+      icon: "🚪",
+      keywords: "logout leave",
+      run: () => signOut({ callbackUrl: "/login" }),
+    },
+  ];
+
   const sidebarEl = (
     <Sidebar
       user={session?.user}
@@ -389,9 +509,32 @@ export default function Home() {
             </svg>
           </button>
           <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => setPaletteOpen(true)}
+              aria-label="Command palette"
+              title="Command palette (Ctrl/⌘ K)"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <kbd className="hidden rounded border border-slate-200 px-1 text-[10px] dark:border-slate-600 sm:inline">
+                ⌘K
+              </kbd>
+            </button>
             <span
               title={live ? "Live — updates in real time" : "Reconnecting…"}
-              className="flex items-center gap-1.5 rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400 sm:px-2.5"
+              className="hidden items-center gap-1.5 rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400 sm:flex"
             >
               <span
                 className={`h-2 w-2 rounded-full ${
@@ -406,7 +549,7 @@ export default function Home() {
               onClick={() => setFindOpen(true)}
               aria-label="Find a time"
               title="Find a time"
-              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+              className="hidden items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 sm:flex"
             >
               <svg
                 width="16"
@@ -431,7 +574,7 @@ export default function Home() {
               }}
               aria-label="Notes"
               title="Notes"
-              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+              className="hidden items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 sm:flex"
             >
               <svg
                 width="16"
@@ -460,7 +603,84 @@ export default function Home() {
                 );
               }}
             />
-            <ThemeToggle />
+            <span className="hidden sm:block">
+              <ThemeToggle />
+            </span>
+
+            {/* Mobile overflow menu */}
+            <div className="relative sm:hidden">
+              <button
+                onClick={() => setMoreOpen((o) => !o)}
+                aria-label="More"
+                title="More"
+                className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+              </button>
+              {moreOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setMoreOpen(false)}
+                  />
+                  <div className="absolute right-0 z-50 mt-2 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                    <div className="flex items-center gap-2 px-3 py-2 text-xs text-slate-400">
+                      <span
+                        className={`h-2 w-2 rounded-full ${
+                          live
+                            ? "animate-pulse bg-emerald-500"
+                            : "bg-slate-300 dark:bg-slate-600"
+                        }`}
+                      />
+                      {live ? "Live — real-time updates" : "Reconnecting…"}
+                    </div>
+                    <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+                    <button
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        setFindOpen(true);
+                      }}
+                    >
+                      🕐 Find a time
+                    </button>
+                    <button
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        setFocusMemo(null);
+                        setNotesCompose(null);
+                        setNotesOpen(true);
+                      }}
+                    >
+                      🗒️ Notes
+                    </button>
+                    <button
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        setTheme(theme === "dark" ? "light" : "dark");
+                      }}
+                    >
+                      {theme === "dark" ? "☀️ Light theme" : "🌙 Dark theme"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -584,6 +804,17 @@ export default function Home() {
             prefillAttendees: guests,
           });
           setCanDelete(false);
+        }}
+      />
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        commands={paletteCommands}
+        onOpenEvent={openEventById}
+        onOpenMemo={(id) => {
+          setFocusMemo(id);
+          setNotesOpen(true);
         }}
       />
 

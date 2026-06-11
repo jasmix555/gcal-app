@@ -19,6 +19,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export interface CalendarHandle {
   refetch: () => void;
+  today: () => void;
+  view: (name: string) => void;
 }
 
 export interface CalendarEvent {
@@ -108,6 +110,8 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
 
   useImperativeHandle(ref, () => ({
     refetch: () => calRef.current?.getApi().refetchEvents(),
+    today: () => calRef.current?.getApi().today(),
+    view: (name: string) => calRef.current?.getApi().changeView(name),
   }));
 
   // Always start on the month view (incl. phones); leaves later manual

@@ -133,6 +133,22 @@ export default function NotesPanel({
     }
   }, [open]);
 
+  // Esc steps back (editor/preview → list), then closes the panel.
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (editing !== null || preview) {
+        setEditing(null);
+        setPreview(null);
+      } else {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, editing, preview, onClose]);
+
   // Tick the deadline countdown once a minute while previewing.
   useEffect(() => {
     if (!preview?.remindAt) return;
