@@ -63,6 +63,7 @@ export default function Sidebar({
   const [manage, setManage] = useState<{
     id: string;
     name: string;
+    role: string;
     tab: "members" | "share";
   } | null>(null);
   const [rename, setRename] = useState<{ id: string; name: string } | null>(
@@ -266,7 +267,12 @@ export default function Sidebar({
                       <button
                         className={menuItem}
                         onClick={() => {
-                          setManage({ id: g.id, name: g.name, tab: "members" });
+                          setManage({
+                            id: g.id,
+                            name: g.name,
+                            role: g.role,
+                            tab: "members",
+                          });
                           setMenuId(null);
                         }}
                       >
@@ -276,7 +282,12 @@ export default function Sidebar({
                         <button
                           className={menuItem}
                           onClick={() => {
-                            setManage({ id: g.id, name: g.name, tab: "share" });
+                            setManage({
+                              id: g.id,
+                              name: g.name,
+                              role: g.role,
+                              tab: "share",
+                            });
                             setMenuId(null);
                           }}
                         >
@@ -340,6 +351,7 @@ export default function Sidebar({
           groupId={manage.id}
           groupName={manage.name}
           initialTab={manage.tab}
+          initialRole={manage.role}
           onClose={() => setManage(null)}
           onChanged={onGroupsChanged}
         />

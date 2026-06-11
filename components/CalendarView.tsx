@@ -15,6 +15,7 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
 import { colorForKey, readableText } from "@/lib/colors";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export interface CalendarHandle {
   refetch: () => void;
@@ -58,6 +59,9 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
   const groupIdsRef = useRef<string[]>(groupIds);
   const groupKey = groupIds.join(",");
   const [loading, setLoading] = useState(false);
+  // Show a full skeleton only until the first load finishes; later refetches
+  // just get the small corner badge so existing events stay visible.
+  const loadedOnce = useRef(false);
 
   // Phone-width detection (initialised before first paint to pick the view).
   const [isMobile, setIsMobile] = useState(
@@ -139,7 +143,27 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
 
   return (
     <div className="relative h-full">
-      {loading && (
+      {loading && !loadedOnce.current && (
+        <div className="absolute inset-0 z-20 flex flex-col bg-white p-1 dark:bg-slate-900">
+          <div className="mb-3 flex items-center justify-between">
+            <Skeleton className="h-8 w-44" />
+            <Skeleton className="h-8 w-36" />
+            <Skeleton className="h-8 w-56" />
+          </div>
+          <div className="mb-1 grid grid-cols-7 gap-1">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <Skeleton key={`h${i}`} className="h-4 w-full" />
+            ))}
+          </div>
+          <div className="grid flex-1 grid-cols-7 grid-rows-5 gap-1">
+            {Array.from({ length: 35 }).map((_, i) => (
+              <Skeleton key={i} className="h-full w-full rounded-md" />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {loading && loadedOnce.current && (
         <div className="pointer-events-none absolute right-2 top-2 z-10 flex items-center gap-1.5 rounded-full bg-slate-900/80 px-3 py-1 text-xs text-white shadow">
           <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />
           Loading…
@@ -149,7 +173,10 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
       <FullCalendar
         ref={calRef}
         plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
-        loading={(isLoading) => setLoading(isLoading)}
+        loading={(isLoading) => {
+          setLoading(isLoading);
+          if (!isLoading) loadedOnce.current = true;
+        }}
         initialView={isMobile ? "timeGridDay" : "dayGridMonth"}
         headerToolbar={
           isMobile

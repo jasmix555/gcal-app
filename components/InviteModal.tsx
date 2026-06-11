@@ -12,6 +12,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { colorForKey } from "@/lib/colors";
 
@@ -28,6 +29,8 @@ interface Props {
   onClose: () => void;
   onChanged?: () => void;
   initialTab?: "members" | "share";
+  /** Role known by the opener, so the Share tab can show before the fetch lands. */
+  initialRole?: string;
 }
 
 const input =
@@ -63,13 +66,16 @@ export default function InviteModal({
   onClose,
   onChanged,
   initialTab = "members",
+  initialRole,
 }: Props) {
   const { data: session } = useSession();
   const myId = (session?.user as any)?.id as string | undefined;
 
   const [tab, setTab] = useState<"members" | "share">(initialTab);
   const [members, setMembers] = useState<Member[]>([]);
-  const [myRole, setMyRole] = useState("MEMBER");
+  const [myRole, setMyRole] = useState(initialRole || "MEMBER");
+  const [membersLoading, setMembersLoading] = useState(true);
+  const [linkLoading, setLinkLoading] = useState(true);
 
   const [link, setLink] = useState("");
   const [code, setCode] = useState("");
@@ -85,17 +91,20 @@ export default function InviteModal({
   const isOwner = myRole === "OWNER";
 
   const loadMembers = useCallback(() => {
+    setMembersLoading(true);
     fetch(`/api/groups/${groupId}`)
       .then((r) => r.json())
       .then((d) => {
         setMembers(d.members || []);
         setMyRole(d.myRole || "MEMBER");
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setMembersLoading(false));
   }, [groupId]);
 
   useEffect(() => {
     loadMembers();
+    setLinkLoading(true);
     fetch(`/api/groups/${groupId}/invite-link`)
       .then(async (r) => {
         if (!r.ok) return;
@@ -103,7 +112,8 @@ export default function InviteModal({
         setLink(d.url);
         setCode(d.code);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLinkLoading(false));
   }, [groupId, loadMembers]);
 
   // Members can't open the Share tab.
@@ -256,6 +266,21 @@ export default function InviteModal({
         {/* ---- Members tab ---- */}
         {tab === "members" && (
           <div className="flex flex-col gap-1">
+            {membersLoading &&
+              members.length === 0 &&
+              Array.from({ length: 3 }).map((_, i) => (
+                <div
+                  key={`s${i}`}
+                  className="flex items-center gap-2 rounded-lg px-1 py-1.5"
+                >
+                  <Skeleton className="h-2.5 w-2.5 rounded-full" />
+                  <div className="flex flex-col gap-1">
+                    <Skeleton className="h-3.5 w-32" />
+                    <Skeleton className="h-3 w-40" />
+                  </div>
+                  <Skeleton className="ml-auto h-5 w-14 rounded-full" />
+                </div>
+              ))}
             {members.map((m) => {
               const isSelf = m.id === myId;
               const ownerControls = isOwner && !isSelf;
@@ -326,24 +351,36 @@ export default function InviteModal({
               <div className="text-xs uppercase tracking-wide text-slate-400">
                 Calendar code
               </div>
-              <div className="select-all font-mono text-lg font-semibold tracking-wider text-slate-800 dark:text-slate-100">
-                {code || "…"}
-              </div>
+              {linkLoading ? (
+                <Skeleton className="mx-auto mt-1 h-6 w-28" />
+              ) : (
+                <div className="select-all font-mono text-lg font-semibold tracking-wider text-slate-800 dark:text-slate-100">
+                  {code || "—"}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2">
-              <input
-                className={input}
-                readOnly
-                value={link}
-                onFocus={(e) => e.currentTarget.select()}
-              />
-              <Button variant="outline" onClick={() => copyText(link, "Link")}>
+              {linkLoading ? (
+                <Skeleton className="h-10 flex-1" />
+              ) : (
+                <input
+                  className={input}
+                  readOnly
+                  value={link}
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+              )}
+              <Button
+                variant="outline"
+                disabled={linkLoading}
+                onClick={() => copyText(link, "Link")}
+              >
                 Copy
               </Button>
             </div>
 
-            <Button onClick={share} className="w-full">
+            <Button onClick={share} disabled={linkLoading} className="w-full">
               <svg
                 width="16"
                 height="16"
