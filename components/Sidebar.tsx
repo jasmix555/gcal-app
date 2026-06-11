@@ -1,11 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { colorForKey } from "@/lib/colors";
 import InviteModal from "@/components/InviteModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface GroupSummary {
   id: string;
@@ -15,82 +23,60 @@ interface GroupSummary {
   isPersonal?: boolean;
 }
 
-interface Member {
-  id: string;
-  name?: string | null;
-  email?: string | null;
-  role: string;
-}
-
 interface Props {
   user?: { name?: string | null; email?: string | null; image?: string | null };
   groups: GroupSummary[];
-  currentGroupId: string | null;
-  onSelectGroup: (id: string) => void;
+  visibleIds: string[];
+  onToggleVisible: (id: string) => void;
   onGroupsChanged: () => void;
   onNewEvent: () => void;
 }
 
 const btn =
-  "rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700";
+  "rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700";
 const btnPrimary =
   "rounded-lg border border-accent bg-accent px-3 py-2 text-sm text-white transition hover:bg-accent-dark disabled:opacity-50";
 const input =
   "w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-900 outline-none focus:border-accent dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500";
 const label = "mb-1 text-xs font-medium uppercase tracking-wide text-slate-400";
+const menuItem =
+  "block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700";
 
 function initials(name?: string | null, email?: string | null) {
   return (name || email || "?").slice(0, 2).toUpperCase();
 }
 
-function Avatar({
-  name,
-  email,
-}: {
-  name?: string | null;
-  email?: string | null;
-}) {
-  return (
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-blue-900">
-      {initials(name, email)}
-    </span>
-  );
-}
-
 export default function Sidebar({
   user,
   groups,
-  currentGroupId,
-  onSelectGroup,
+  visibleIds,
+  onToggleVisible,
   onGroupsChanged,
   onNewEvent,
 }: Props) {
   const { data: session } = useSession();
   const myId = (session?.user as any)?.id as string | undefined;
 
-  const [members, setMembers] = useState<Member[]>([]);
-  const [myRole, setMyRole] = useState<string>("MEMBER");
   const [newGroup, setNewGroup] = useState("");
-  const [showInvite, setShowInvite] = useState(false);
-  const [confirmDeleteGroup, setConfirmDeleteGroup] = useState(false);
-  const [confirmLeave, setConfirmLeave] = useState(false);
-  const [memberToRemove, setMemberToRemove] = useState<Member | null>(null);
-
-  const loadMembers = useCallback(() => {
-    if (!currentGroupId) {
-      setMembers([]);
-      return;
-    }
-    fetch(`/api/groups/${currentGroupId}`)
-      .then((r) => r.json())
-      .then((d) => {
-        setMembers(d.members || []);
-        setMyRole(d.myRole || "MEMBER");
-      })
-      .catch(() => setMembers([]));
-  }, [currentGroupId]);
-
-  useEffect(loadMembers, [loadMembers]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const [manage, setManage] = useState<{
+    id: string;
+    name: string;
+    tab: "members" | "share";
+  } | null>(null);
+  const [rename, setRename] = useState<{ id: string; name: string } | null>(
+    null
+  );
+  const [renameValue, setRenameValue] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [confirmLeave, setConfirmLeave] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   async function createGroup(e: React.FormEvent) {
     e.preventDefault();
@@ -105,76 +91,75 @@ export default function Sidebar({
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Could not create group");
       setNewGroup("");
-      toast.success(`Group “${name}” created`);
+      setShowCreate(false);
+      toast.success(`Calendar “${name}” created`);
       onGroupsChanged();
-      if (d.group?.id) onSelectGroup(d.group.id);
+      if (d.group?.id) onToggleVisible(d.group.id);
     } catch (err: any) {
       toast.error(err.message || "Could not create group");
     }
   }
 
-  async function doRemoveMember(member: Member) {
-    if (!currentGroupId) return;
+  async function doRename() {
+    if (!rename) return;
+    const name = renameValue.trim();
+    if (!name) return;
+    try {
+      const res = await fetch(`/api/groups/${rename.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Could not rename");
+      toast.success("Calendar renamed");
+      setRename(null);
+      onGroupsChanged();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  }
+
+  async function doDelete() {
+    if (!confirmDelete) return;
+    try {
+      const res = await fetch(`/api/groups/${confirmDelete.id}`, {
+        method: "DELETE",
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Could not delete");
+      toast.success("Calendar deleted");
+      setConfirmDelete(null);
+      onGroupsChanged();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  }
+
+  async function doLeave() {
+    if (!confirmLeave || !myId) return;
     try {
       const res = await fetch(
-        `/api/groups/${currentGroupId}/members/${member.id}`,
-        { method: "DELETE" }
+        `/api/groups/${confirmLeave.id}/members/${myId}`,
+        {
+          method: "DELETE",
+        }
       );
       const d = await res.json();
-      if (!res.ok) throw new Error(d.error || "Could not remove member");
-      toast.success(`Removed ${member.name || member.email}`);
-      loadMembers();
+      if (!res.ok) throw new Error(d.error || "Could not leave");
+      toast.success("Left the calendar");
+      setConfirmLeave(null);
       onGroupsChanged();
     } catch (err: any) {
       toast.error(err.message);
     }
   }
 
-  async function doDeleteGroup() {
-    if (!currentGroupId) return;
-    try {
-      const res = await fetch(`/api/groups/${currentGroupId}`, {
-        method: "DELETE",
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || "Could not delete group");
-      toast.success("Group deleted");
-      onSelectGroup("");
-      onGroupsChanged();
-    } catch (err: any) {
-      toast.error(err.message);
-    }
-  }
-
-  async function doLeaveGroup() {
-    if (!currentGroupId || !myId) return;
-    try {
-      const res = await fetch(`/api/groups/${currentGroupId}/members/${myId}`, {
-        method: "DELETE",
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || "Could not leave group");
-      toast.success("Left the group");
-      onSelectGroup("");
-      onGroupsChanged();
-    } catch (err: any) {
-      toast.error(err.message);
-    }
-  }
-
-  const currentGroup = groups.find((g) => g.id === currentGroupId);
-  const isPersonal = !!currentGroup?.isPersonal;
-  const isOwner = myRole === "OWNER";
-  const canInvite = (myRole === "OWNER" || myRole === "ADMIN") && !isPersonal;
-  const canLeave = !!currentGroupId && !isPersonal && !isOwner;
-
-  // Only disambiguate with a count when two groups share the exact same name.
+  // Disambiguate duplicate (non-personal) names with a member count.
   const nameCounts = groups.reduce<Record<string, number>>((acc, g) => {
-    acc[g.name] = (acc[g.name] || 0) + 1;
+    if (!g.isPersonal) acc[g.name] = (acc[g.name] || 0) + 1;
     return acc;
   }, {});
-  const currentGroupName =
-    groups.find((g) => g.id === currentGroupId)?.name || "this group";
 
   return (
     <aside className="animate-fade-in flex h-full w-[300px] max-w-[85vw] shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
@@ -186,7 +171,9 @@ export default function Sidebar({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={user.image} alt="" className="h-8 w-8 rounded-full" />
           ) : (
-            <Avatar name={user.name} email={user.email} />
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-blue-900">
+              {initials(user.name, user.email)}
+            </span>
           )}
           <div className="min-w-0">
             <div className="truncate">{user.name || user.email}</div>
@@ -198,101 +185,146 @@ export default function Sidebar({
       <button
         className={`${btnPrimary} w-full shadow-sm hover:-translate-y-px hover:shadow-md active:translate-y-0`}
         onClick={onNewEvent}
-        disabled={!currentGroupId}
+        disabled={groups.length === 0}
       >
         + New event
       </button>
 
       <div>
-        <p className={label}>Group</p>
-        <select
-          className={input}
-          value={currentGroupId || ""}
-          onChange={(e) => onSelectGroup(e.target.value)}
-        >
-          {groups.length === 0 && <option value="">No groups yet</option>}
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.isPersonal ? "🔒 Personal (only me)" : g.name}
-              {!g.isPersonal && nameCounts[g.name] > 1
-                ? ` (${g.memberCount} members)`
-                : ""}
-            </option>
-          ))}
-        </select>
-        <form className="mt-2 flex gap-1.5" onSubmit={createGroup}>
-          <input
-            className={input}
-            value={newGroup}
-            onChange={(e) => setNewGroup(e.target.value)}
-            placeholder="New group name"
-          />
+        <div className="mb-1 flex items-center justify-between">
+          <p className={`${label} mb-0`}>My calendars</p>
           <button
-            className={`${btn} disabled:cursor-not-allowed`}
-            type="submit"
-            disabled={!newGroup.trim()}
+            onClick={() => {
+              setNewGroup("");
+              setShowCreate(true);
+            }}
+            aria-label="New calendar"
+            title="New calendar"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800"
           >
-            Create
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
           </button>
-        </form>
-      </div>
-
-      {currentGroupId && !isPersonal && (
-        <div>
-          <p className={label}>Members</p>
-          <div className="flex flex-col gap-0.5">
-            {members.map((m) => (
+        </div>
+        <div className="flex flex-col gap-0.5">
+          {groups.map((g) => {
+            const visible = visibleIds.includes(g.id);
+            const color = colorForKey(g.id);
+            const canManage =
+              !g.isPersonal && (g.role === "OWNER" || g.role === "ADMIN");
+            const canDelete = !g.isPersonal && g.role === "OWNER";
+            const canLeave = !g.isPersonal && g.role !== "OWNER";
+            const hasMenu = !g.isPersonal;
+            return (
               <div
-                key={m.id}
-                className="group flex items-center gap-2 rounded-lg px-1.5 py-1.5 text-[13px] transition hover:bg-slate-100 dark:hover:bg-slate-800"
+                key={g.id}
+                className="group relative flex items-center gap-2 rounded-lg px-1.5 py-1.5 text-sm transition hover:bg-slate-100 dark:hover:bg-slate-800"
               >
-                <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: colorForKey(m.id || m.email) }}
+                <input
+                  type="checkbox"
+                  checked={visible}
+                  onChange={() => onToggleVisible(g.id)}
+                  style={{ accentColor: color }}
+                  className="h-4 w-4 shrink-0 cursor-pointer"
+                  aria-label={`Toggle ${g.name}`}
                 />
-                <span className="truncate">{m.name || m.email}</span>
-                <span className="ml-auto text-[11px] uppercase text-slate-400">
-                  {m.role}
+                <span className="truncate">
+                  {g.isPersonal ? "🔒 Personal" : g.name}
+                  {!g.isPersonal && nameCounts[g.name] > 1
+                    ? ` (${g.memberCount})`
+                    : ""}
                 </span>
-                {canInvite && m.role !== "OWNER" && (
+
+                {hasMenu && (
                   <button
-                    onClick={() => setMemberToRemove(m)}
-                    title="Remove from group"
-                    aria-label={`Remove ${m.name || m.email}`}
-                    className="ml-1 hidden h-5 w-5 shrink-0 items-center justify-center rounded text-slate-400 transition hover:bg-red-50 hover:text-red-600 group-hover:flex"
+                    onClick={() => setMenuId(menuId === g.id ? null : g.id)}
+                    aria-label="Calendar options"
+                    className="ml-auto rounded px-1.5 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
                   >
-                    ✕
+                    ⋯
                   </button>
                 )}
+
+                {menuId === g.id && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setMenuId(null)}
+                    />
+                    <div className="absolute right-1 top-9 z-50 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                      <button
+                        className={menuItem}
+                        onClick={() => {
+                          setManage({ id: g.id, name: g.name, tab: "members" });
+                          setMenuId(null);
+                        }}
+                      >
+                        Members
+                      </button>
+                      {canManage && (
+                        <button
+                          className={menuItem}
+                          onClick={() => {
+                            setManage({ id: g.id, name: g.name, tab: "share" });
+                            setMenuId(null);
+                          }}
+                        >
+                          Share
+                        </button>
+                      )}
+                      {canManage && (
+                        <button
+                          className={menuItem}
+                          onClick={() => {
+                            setRename({ id: g.id, name: g.name });
+                            setRenameValue(g.name);
+                            setMenuId(null);
+                          }}
+                        >
+                          Rename
+                        </button>
+                      )}
+                      {canLeave && (
+                        <button
+                          className={menuItem}
+                          onClick={() => {
+                            setConfirmLeave({ id: g.id, name: g.name });
+                            setMenuId(null);
+                          }}
+                        >
+                          Leave calendar
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          className={`${menuItem} text-red-600 dark:text-red-400`}
+                          onClick={() => {
+                            setConfirmDelete({ id: g.id, name: g.name });
+                            setMenuId(null);
+                          }}
+                        >
+                          Delete calendar
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
-      )}
-
-      {currentGroupId && canInvite && (
-        <button className={`${btn} w-full`} onClick={() => setShowInvite(true)}>
-          Invite people
-        </button>
-      )}
-
-      {isOwner && !isPersonal && (
-        <button
-          className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-red-600 transition hover:bg-red-50 dark:border-red-900/60 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-950/40"
-          onClick={() => setConfirmDeleteGroup(true)}
-        >
-          Delete group
-        </button>
-      )}
-
-      {canLeave && (
-        <button
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-          onClick={() => setConfirmLeave(true)}
-        >
-          Leave group
-        </button>
-      )}
+      </div>
 
       <div className="mt-auto">
         <button
@@ -303,53 +335,90 @@ export default function Sidebar({
         </button>
       </div>
 
-      {showInvite && currentGroupId && (
+      {manage && (
         <InviteModal
-          groupId={currentGroupId}
-          groupName={currentGroupName}
-          onClose={() => setShowInvite(false)}
+          groupId={manage.id}
+          groupName={manage.name}
+          initialTab={manage.tab}
+          onClose={() => setManage(null)}
+          onChanged={onGroupsChanged}
         />
       )}
 
+      {/* Create calendar dialog */}
+      <Dialog
+        open={showCreate}
+        onOpenChange={(o) => !o && setShowCreate(false)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New calendar</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={createGroup} className="flex flex-col gap-3">
+            <input
+              autoFocus
+              className={input}
+              value={newGroup}
+              onChange={(e) => setNewGroup(e.target.value)}
+              placeholder="Calendar name"
+            />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowCreate(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!newGroup.trim()}>
+                Create
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename dialog */}
+      <Dialog open={!!rename} onOpenChange={(o) => !o && setRename(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename calendar</DialogTitle>
+          </DialogHeader>
+          <input
+            autoFocus
+            className={input}
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && doRename()}
+            placeholder="Calendar name"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRename(null)}>
+              Cancel
+            </Button>
+            <Button onClick={doRename} disabled={!renameValue.trim()}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmDialog
-        open={confirmDeleteGroup}
-        onOpenChange={setConfirmDeleteGroup}
-        title={`Delete “${currentGroupName}”?`}
-        description="This permanently removes the group and all of its events for everyone. This can't be undone."
-        confirmLabel="Delete group"
-        onConfirm={() => {
-          setConfirmDeleteGroup(false);
-          doDeleteGroup();
-        }}
+        open={!!confirmDelete}
+        onOpenChange={(o) => !o && setConfirmDelete(null)}
+        title={`Delete “${confirmDelete?.name ?? ""}”?`}
+        description="This permanently removes the calendar and all of its events for everyone. This can't be undone."
+        confirmLabel="Delete calendar"
+        onConfirm={doDelete}
       />
 
       <ConfirmDialog
-        open={!!memberToRemove}
-        onOpenChange={(o) => !o && setMemberToRemove(null)}
-        title="Remove member?"
-        description={
-          memberToRemove
-            ? `Remove ${memberToRemove.name || memberToRemove.email} from this group?`
-            : ""
-        }
-        confirmLabel="Remove"
-        onConfirm={() => {
-          const m = memberToRemove;
-          setMemberToRemove(null);
-          if (m) doRemoveMember(m);
-        }}
-      />
-
-      <ConfirmDialog
-        open={confirmLeave}
-        onOpenChange={setConfirmLeave}
-        title={`Leave “${currentGroupName}”?`}
+        open={!!confirmLeave}
+        onOpenChange={(o) => !o && setConfirmLeave(null)}
+        title={`Leave “${confirmLeave?.name ?? ""}”?`}
         description="You'll lose access to this calendar. You can be invited back later."
-        confirmLabel="Leave group"
-        onConfirm={() => {
-          setConfirmLeave(false);
-          doLeaveGroup();
-        }}
+        confirmLabel="Leave calendar"
+        onConfirm={doLeave}
       />
     </aside>
   );

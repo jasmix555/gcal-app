@@ -32,7 +32,7 @@ export default function Home() {
 
   const [mounted, setMounted] = useState(false);
   const [groups, setGroups] = useState<GroupSummary[]>([]);
-  const [currentGroupId, setCurrentGroupId] = useState<string | null>(null);
+  const [visibleIds, setVisibleIds] = useState<string[]>([]);
   const [modalEvent, setModalEvent] = useState<EditableEvent | null>(null);
   const [canDelete, setCanDelete] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -65,24 +65,54 @@ export default function Home() {
     const d = await res.json();
     const gs: GroupSummary[] = d.groups || [];
     setGroups(gs);
-    setCurrentGroupId((prev) => prev || (gs[0]?.id ?? null));
+    setVisibleIds((prev) => {
+      const valid = gs.map((g) => g.id);
+      if (prev.length) return prev.filter((id) => valid.includes(id));
+      try {
+        const saved = JSON.parse(
+          localStorage.getItem("visibleCalendars") || "[]"
+        ) as string[];
+        const restored = saved.filter((id) => valid.includes(id));
+        return restored.length ? restored : valid;
+      } catch {
+        return valid;
+      }
+    });
   }, []);
 
   useEffect(() => {
     if (status === "authenticated") loadGroups();
   }, [status, loadGroups]);
 
-  const currentRole =
-    groups.find((g) => g.id === currentGroupId)?.role || "MEMBER";
+  useEffect(() => {
+    try {
+      localStorage.setItem("visibleCalendars", JSON.stringify(visibleIds));
+    } catch {
+      /* ignore */
+    }
+  }, [visibleIds]);
+
   const myId = (session?.user as any)?.id as string | undefined;
+  const defaultGroupId =
+    groups.find((g) => g.isPersonal)?.id || groups[0]?.id || null;
+  const roleFor = (gid?: string | null) =>
+    groups.find((g) => g.id === gid)?.role || "MEMBER";
+
+  const toggleVisible = useCallback(
+    (id: string) =>
+      setVisibleIds((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      ),
+    []
+  );
 
   function refetch() {
     calRef.current?.refetch();
   }
 
   function openNewEvent() {
-    if (!currentGroupId) {
-      toast("Create or pick a group first (left sidebar) to add events.");
+    if (!defaultGroupId) {
+      toast("No calendar available yet.");
       return;
     }
     const start = new Date();
@@ -110,11 +140,14 @@ export default function Home() {
         start: ev.start,
         end: ev.end,
         allDay: ev.allDay,
+        groupId: ev.groupId,
         createdBy: ev.createdBy,
         updatedBy: ev.updatedBy,
       });
-      const privileged = currentRole === "OWNER" || currentRole === "ADMIN";
-      setCanDelete(privileged || ev.createdBy?.id === myId);
+      const role = roleFor(ev.groupId);
+      setCanDelete(
+        role === "OWNER" || role === "ADMIN" || ev.createdBy?.id === myId
+      );
     } catch {
       /* ignore */
     }
@@ -123,19 +156,15 @@ export default function Home() {
   const openExisting = useCallback(
     (ev: CalendarEvent) => {
       setModalEvent(ev);
-      const privileged = currentRole === "OWNER" || currentRole === "ADMIN";
+      const role = roleFor(ev.groupId);
       const isCreator = (ev.createdBy as any)?.id === myId;
-      setCanDelete(privileged || isCreator);
+      setCanDelete(role === "OWNER" || role === "ADMIN" || isCreator);
     },
-    [currentRole, myId]
+    [groups, myId]
   );
 
   const handleSelectRange = useCallback(
     (range: { start: string; end: string; allDay: boolean }) => {
-      if (!currentGroupId) {
-        toast("Create or pick a group first (left sidebar) to add events.");
-        return;
-      }
       setModalEvent({
         title: "",
         start: range.start,
@@ -144,14 +173,10 @@ export default function Home() {
       });
       setCanDelete(false);
     },
-    [currentGroupId]
+    []
   );
 
   async function handleSave(e: EditableEvent) {
-    if (!currentGroupId) {
-      toast("Create or pick a group first (left sidebar) to add events.");
-      return;
-    }
     setSaving(true);
     try {
       if (e.id) {
@@ -165,7 +190,7 @@ export default function Home() {
         const res = await fetch("/api/events", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...e, groupId: e.groupId || currentGroupId }),
+          body: JSON.stringify({ ...e, groupId: e.groupId || defaultGroupId }),
         });
         if (!res.ok) throw new Error(await errorMessage(res, "Create failed"));
       }
@@ -230,11 +255,8 @@ export default function Home() {
     <Sidebar
       user={session?.user}
       groups={groups}
-      currentGroupId={currentGroupId}
-      onSelectGroup={(id) => {
-        setCurrentGroupId(id);
-        if (isMobile) setSidebarOpen(false);
-      }}
+      visibleIds={visibleIds}
+      onToggleVisible={toggleVisible}
       onGroupsChanged={loadGroups}
       onNewEvent={() => {
         openNewEvent();
@@ -286,7 +308,9 @@ export default function Home() {
               onOpenEvent={openEventById}
               onInvitationAccepted={(groupId) => {
                 loadGroups();
-                setCurrentGroupId(groupId);
+                setVisibleIds((prev) =>
+                  prev.includes(groupId) ? prev : [...prev, groupId]
+                );
               }}
             />
             <ThemeToggle />
@@ -298,7 +322,7 @@ export default function Home() {
             {mounted && (
               <CalendarView
                 ref={calRef}
-                groupId={currentGroupId}
+                groupIds={visibleIds}
                 onEventClick={openExisting}
                 onSelectRange={handleSelectRange}
                 onReschedule={handleReschedule}
@@ -314,7 +338,7 @@ export default function Home() {
           canDelete={canDelete}
           saving={saving}
           groups={groups}
-          defaultGroupId={currentGroupId}
+          defaultGroupId={defaultGroupId}
           onSave={handleSave}
           onDelete={handleDelete}
           onClose={() => setModalEvent(null)}

@@ -5,6 +5,70 @@ import { getMembership } from "@/lib/permissions";
 export const dynamic = "force-dynamic";
 
 /**
+ * PATCH /api/groups/:id/members/:userId  Body: { role: "ADMIN"|"MEMBER"|"OWNER" }
+ * Owner-only. role "OWNER" transfers ownership (the current owner becomes ADMIN).
+ */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string; userId: string } }
+) {
+  const me = await getMembership(params.id);
+  if (!me) {
+    return NextResponse.json({ error: "Not a member" }, { status: 403 });
+  }
+  if (me.role !== "OWNER") {
+    return NextResponse.json(
+      { error: "Only the owner can change roles." },
+      { status: 403 }
+    );
+  }
+  if (params.userId === me.userId) {
+    return NextResponse.json(
+      { error: "You can't change your own role." },
+      { status: 400 }
+    );
+  }
+
+  const { role } = await req.json();
+  if (!["OWNER", "ADMIN", "MEMBER"].includes(role)) {
+    return NextResponse.json({ error: "Invalid role." }, { status: 400 });
+  }
+
+  const target = await prisma.membership.findUnique({
+    where: { userId_groupId: { userId: params.userId, groupId: params.id } },
+  });
+  if (!target) {
+    return NextResponse.json(
+      { error: "That person isn't in this group." },
+      { status: 404 }
+    );
+  }
+
+  if (role === "OWNER") {
+    // Transfer ownership: target → OWNER, current owner → ADMIN.
+    await prisma.$transaction([
+      prisma.membership.update({
+        where: {
+          userId_groupId: { userId: params.userId, groupId: params.id },
+        },
+        data: { role: "OWNER" },
+      }),
+      prisma.membership.update({
+        where: { userId_groupId: { userId: me.userId, groupId: params.id } },
+        data: { role: "ADMIN" },
+      }),
+    ]);
+  } else {
+    await prisma.membership.update({
+      where: { userId_groupId: { userId: params.userId, groupId: params.id } },
+      data: { role },
+    });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
+/**
  * DELETE /api/groups/:id/members/:userId
  * Remove a member from the group.
  * - Requester must be OWNER or ADMIN.

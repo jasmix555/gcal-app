@@ -44,6 +44,43 @@ export async function GET(
   });
 }
 
+/** PATCH /api/groups/:id — rename (owner/admin; not the personal calendar). */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const membership = await getMembership(params.id);
+  if (!membership) {
+    return NextResponse.json({ error: "Not a member" }, { status: 403 });
+  }
+  if (membership.role !== "OWNER" && membership.role !== "ADMIN") {
+    return NextResponse.json(
+      { error: "Only owners and admins can rename a calendar." },
+      { status: 403 }
+    );
+  }
+
+  const group = await prisma.group.findUnique({ where: { id: params.id } });
+  if (!group) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (group.isPersonal) {
+    return NextResponse.json(
+      { error: "The personal calendar can't be renamed." },
+      { status: 400 }
+    );
+  }
+
+  const { name } = await req.json();
+  if (!name || !String(name).trim()) {
+    return NextResponse.json({ error: "Name is required." }, { status: 400 });
+  }
+
+  await prisma.group.update({
+    where: { id: params.id },
+    data: { name: String(name).trim() },
+  });
+  return NextResponse.json({ ok: true });
+}
+
 /** DELETE /api/groups/:id — owner only. Cascade-removes members/events/invites. */
 export async function DELETE(
   _req: NextRequest,

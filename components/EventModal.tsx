@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import DateTimeField from "@/components/DateTimeField";
-import { PASTEL_PALETTE } from "@/lib/colors";
+import { colorForKey } from "@/lib/colors";
 
 export interface EditableEvent {
   id?: string;
@@ -159,7 +159,6 @@ export default function EventModal({
   useEffect(() => {
     setForm({
       ...event,
-      color: event.color ?? (event.id ? null : PASTEL_PALETTE[6]),
       start: toLocalInput(event.start, event.allDay),
       end: toLocalInput(event.end, event.allDay),
     });
@@ -279,7 +278,7 @@ export default function EventModal({
     setProposing(true);
   }
 
-  const dotColor = form.color || "#2563eb";
+  const dotColor = colorForKey(targetGroupId || form.groupId);
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -496,26 +495,6 @@ export default function EventModal({
                 />
                 All day
               </label>
-
-              <div>
-                <label className={label}>Color</label>
-                <div className="flex flex-wrap gap-2">
-                  {PASTEL_PALETTE.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => update("color", c)}
-                      aria-label={`Pick color ${c}`}
-                      className={`h-7 w-7 rounded-full border transition hover:scale-110 ${
-                        form.color === c
-                          ? "border-transparent ring-2 ring-slate-400 ring-offset-2 dark:ring-offset-slate-900"
-                          : "border-black/10"
-                      }`}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
-                </div>
-              </div>
 
               <div className="flex flex-col gap-2.5 sm:flex-row">
                 <div className="flex-1">

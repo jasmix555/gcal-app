@@ -22,6 +22,7 @@ export interface CalendarHandle {
 
 export interface CalendarEvent {
   id: string;
+  groupId?: string;
   title: string;
   description?: string;
   location?: string;
@@ -34,7 +35,7 @@ export interface CalendarEvent {
 }
 
 interface Props {
-  groupId: string | null;
+  groupIds: string[];
   onEventClick: (e: CalendarEvent) => void;
   onSelectRange: (range: {
     start: string;
@@ -50,11 +51,12 @@ interface Props {
 }
 
 const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
-  { groupId, onEventClick, onSelectRange, onReschedule },
+  { groupIds, onEventClick, onSelectRange, onReschedule },
   ref
 ) {
   const calRef = useRef<FullCalendar>(null);
-  const groupIdRef = useRef<string | null>(groupId);
+  const groupIdsRef = useRef<string[]>(groupIds);
+  const groupKey = groupIds.join(",");
   const [loading, setLoading] = useState(false);
 
   // Phone-width detection (initialised before first paint to pick the view).
@@ -79,9 +81,10 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
   }, [isMobile]);
 
   useEffect(() => {
-    groupIdRef.current = groupId;
+    groupIdsRef.current = groupIds;
     calRef.current?.getApi().refetchEvents();
-  }, [groupId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupKey]);
 
   useImperativeHandle(ref, () => ({
     refetch: () => calRef.current?.getApi().refetchEvents(),
@@ -90,14 +93,14 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
   // Stable reference so re-renders don't make FullCalendar refetch everything.
   const fetchEvents = useCallback(
     async (info: any, success: any, failure: any) => {
-      const gid = groupIdRef.current;
-      if (!gid) {
+      const ids = groupIdsRef.current;
+      if (!ids || ids.length === 0) {
         success([]);
         return;
       }
       try {
         const res = await fetch(
-          `/api/events?groupId=${encodeURIComponent(gid)}&timeMin=${encodeURIComponent(
+          `/api/events?groupIds=${encodeURIComponent(ids.join(","))}&timeMin=${encodeURIComponent(
             info.startStr
           )}&timeMax=${encodeURIComponent(info.endStr)}`
         );
@@ -105,10 +108,8 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
         if (!res.ok) throw new Error(data.error || "Failed to load events");
         success(
           data.events.map((e: CalendarEvent) => {
-            // Use the event's chosen color, else fall back to the creator color.
-            const color =
-              e.color ||
-              colorForKey((e.createdBy as any)?.id || e.createdBy?.email);
+            // Always color an event by its calendar (matches the sidebar checkbox).
+            const color = colorForKey(e.groupId);
             return {
               id: e.id,
               title: e.title,
@@ -119,6 +120,7 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
               borderColor: color,
               textColor: readableText(color),
               extendedProps: {
+                groupId: e.groupId,
                 description: e.description,
                 location: e.location,
                 color: e.color || null,
@@ -173,6 +175,7 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
           const ep = info.event.extendedProps as any;
           onEventClick({
             id: info.event.id,
+            groupId: ep.groupId,
             title: info.event.title,
             description: ep.description,
             location: ep.location,

@@ -41,24 +41,36 @@ function serialize(e: any) {
   };
 }
 
-/** GET /api/events?groupId=&timeMin=&timeMax= — events for a group in range. */
+/**
+ * GET /api/events?groupIds=a,b,c&timeMin=&timeMax=
+ * (single ?groupId= still supported). Returns events from every requested
+ * calendar the current user is actually a member of.
+ */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const groupId = searchParams.get("groupId");
-  if (!groupId) {
-    return NextResponse.json({ error: "groupId is required" }, { status: 400 });
+  const raw = searchParams.get("groupIds") || searchParams.get("groupId") || "";
+  const requestedIds = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (requestedIds.length === 0) {
+    return NextResponse.json({ events: [] });
   }
 
-  const membership = await getMembership(groupId);
-  if (!membership) {
-    return NextResponse.json({ error: "Not a member" }, { status: 403 });
+  // Keep only calendars the user belongs to.
+  const memberships = await Promise.all(
+    requestedIds.map(async (id) => ((await getMembership(id)) ? id : null))
+  );
+  const allowedIds = memberships.filter(Boolean) as string[];
+  if (allowedIds.length === 0) {
+    return NextResponse.json({ events: [] });
   }
 
   const timeMin = searchParams.get("timeMin");
   const timeMax = searchParams.get("timeMax");
 
   // Overlap filter: event starts before the window ends and ends after it starts.
-  const where: any = { groupId };
+  const where: any = { groupId: { in: allowedIds } };
   if (timeMin) where.end = { gt: new Date(timeMin) };
   if (timeMax) where.start = { lt: new Date(timeMax) };
 
