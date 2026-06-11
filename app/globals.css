@@ -121,19 +121,26 @@ body {
 }
 
 /* Events → rounded, padded, soft shadow, gentle hover lift */
-.fc .fc-event,
 .fc .fc-event .fc-event-main {
   border: none;
   border-radius: 8px;
 }
 
 .fc .fc-event {
+  border: 1px solid; /* color comes from FullCalendar's per-event borderColor */
+  border-radius: 8px;
   padding: 1px 2px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
   transition:
     transform 0.12s ease,
     box-shadow 0.12s ease,
     filter 0.12s ease;
+}
+
+/* Memo reminders read as notes: dashed outline rather than a solid block. */
+.fc .fc-event.evt-memo {
+  border-style: dashed;
+  box-shadow: none;
 }
 
 .fc .fc-event:hover {
@@ -359,25 +366,32 @@ body {
   text-decoration: underline;
 }
 
-/* Checklists: no bullets, inline checkbox + label. */
-.rte-content ul.todo-list {
-  list-style: none;
-  padding-left: 0.2em;
-}
+/* Checklists: independent lines (.todo-item), plus legacy ul.todo-list. */
+.rte-content .todo-item,
 .rte-content ul.todo-list li {
   display: flex;
   align-items: flex-start;
   gap: 0.5em;
   margin: 0.15em 0;
 }
+.rte-content ul.todo-list {
+  list-style: none;
+  padding-left: 0.2em;
+}
+.rte-content .todo-item span {
+  flex: 1;
+  outline: none;
+}
+.rte-content .todo-item input[type="checkbox"],
 .rte-content ul.todo-list input[type="checkbox"] {
-  margin-top: 0.2em;
+  margin-top: 0.25em;
   width: 1em;
   height: 1em;
   accent-color: #2563eb;
   cursor: pointer;
   flex-shrink: 0;
 }
+.rte-content .todo-item input[type="checkbox"]:checked + span,
 .rte-content ul.todo-list input[type="checkbox"]:checked + span {
   text-decoration: line-through;
   color: #94a3b8;

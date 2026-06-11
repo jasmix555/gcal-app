@@ -36,6 +36,15 @@ export function readableText(hex?: string | null): string {
   return luminance > 0.6 ? "#1f2937" : "#ffffff";
 }
 
+/** Convert a #rrggbb hex to an rgba() string with the given alpha. */
+export function hexToRgba(hex: string, alpha: number): string {
+  if (!hex || hex.length < 7) return `rgba(37, 99, 235, ${alpha})`;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 /** Deterministically map a key (user id or email) to a palette color. */
 export function colorForKey(key?: string | null): string {
   if (!key) return PALETTE[0];

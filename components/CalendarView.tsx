@@ -14,7 +14,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import listPlugin from "@fullcalendar/list";
 import interactionPlugin from "@fullcalendar/interaction";
-import { colorForKey, readableText } from "@/lib/colors";
+import { colorForKey, readableText, hexToRgba } from "@/lib/colors";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export interface CalendarHandle {
@@ -121,15 +121,26 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
         const eventItems = data.events.map((e: CalendarEvent) => {
           // Always color an event by its calendar (matches the sidebar checkbox).
           const color = colorForKey(e.groupId);
+          // All-day → solid fill at 100%. Timed → lighter tinted fill with the
+          // full color as the border + text (Google-style).
+          const styled = e.allDay
+            ? {
+                backgroundColor: color,
+                borderColor: color,
+                textColor: readableText(color),
+              }
+            : {
+                backgroundColor: hexToRgba(color, 0.16),
+                borderColor: color,
+                textColor: color,
+              };
           return {
             id: e.id,
             title: e.title,
             start: e.start,
             end: e.end,
             allDay: e.allDay,
-            backgroundColor: color,
-            borderColor: color,
-            textColor: readableText(color),
+            ...styled,
             extendedProps: {
               groupId: e.groupId,
               description: e.description,
@@ -141,7 +152,8 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
           };
         });
 
-        // Memo reminders: pinned, not draggable, prefixed so they read as notes.
+        // Memo reminders: outlined (transparent fill, colored border) so they
+        // read as notes rather than full events. Pinned, not draggable.
         let memoItems: any[] = [];
         if (memosRes.ok) {
           const md = await memosRes.json();
@@ -155,9 +167,10 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
                 start: m.remindAt,
                 allDay: false,
                 editable: false,
-                backgroundColor: color,
+                classNames: ["evt-memo"],
+                backgroundColor: hexToRgba(color, 0.08),
                 borderColor: color,
-                textColor: readableText(color),
+                textColor: color,
                 extendedProps: { memoId: m.id },
               };
             });
@@ -226,6 +239,7 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
         selectable
         selectMirror
         dayMaxEvents
+        eventDisplay="block"
         height="100%"
         events={fetchEvents}
         eventClick={(info) => {
