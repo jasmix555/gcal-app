@@ -62,6 +62,21 @@ function fmtRemind(iso: string) {
   });
 }
 
+/** Human countdown to a deadline, e.g. "3 days 4 hours 12 minutes left". */
+function timeLeft(iso: string): { text: string; overdue: boolean } {
+  const diff = new Date(iso).getTime() - Date.now();
+  if (diff <= 0) return { text: "Past deadline", overdue: true };
+  const totalMin = Math.floor(diff / 60000);
+  const days = Math.floor(totalMin / 1440);
+  const hours = Math.floor((totalMin % 1440) / 60);
+  const mins = totalMin % 60;
+  const parts: string[] = [];
+  if (days) parts.push(`${days} day${days > 1 ? "s" : ""}`);
+  if (hours) parts.push(`${hours} hour${hours > 1 ? "s" : ""}`);
+  parts.push(`${mins} minute${mins !== 1 ? "s" : ""}`);
+  return { text: `${parts.join(" ")} left`, overdue: false };
+}
+
 export default function NotesPanel({
   open,
   onClose,
@@ -81,6 +96,8 @@ export default function NotesPanel({
   const [remind, setRemind] = useState<string>(""); // local "YYYY-MM-DDTHH:mm" or ""
   const [saving, setSaving] = useState(false);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
+  const [preview, setPreview] = useState<Memo | null>(null);
+  const [, setTick] = useState(0); // re-render to refresh the deadline countdown
 
   const load = useCallback(() => {
     setLoaded(false);
@@ -95,7 +112,24 @@ export default function NotesPanel({
     if (open) load();
   }, [open, load]);
 
+  // Reset to the list whenever the panel closes, so reopening doesn't leave you
+  // stuck in a stale editor/preview (the component stays mounted while closed).
+  useEffect(() => {
+    if (!open) {
+      setEditing(null);
+      setPreview(null);
+    }
+  }, [open]);
+
+  // Tick the deadline countdown once a minute while previewing.
+  useEffect(() => {
+    if (!preview?.remindAt) return;
+    const t = setInterval(() => setTick((n) => n + 1), 60000);
+    return () => clearInterval(t);
+  }, [preview]);
+
   const openMemo = useCallback((m: Memo) => {
+    setPreview(null);
     setEditing(m.id);
     setTitle(m.title);
     setContent(m.content);
@@ -103,14 +137,21 @@ export default function NotesPanel({
     setRemind(m.remindAt ? isoToLocal(m.remindAt) : "");
   }, []);
 
-  // Jump to a specific memo when asked (e.g. clicking a calendar reminder).
+  // Open a memo read-only (preview) first; edit is one click away.
+  const openPreview = useCallback((m: Memo) => {
+    setEditing(null);
+    setPreview(m);
+  }, []);
+
+  // Clicking a calendar reminder opens the note's preview.
   useEffect(() => {
     if (!open || !focusMemoId) return;
     const found = memos.find((m) => m.id === focusMemoId);
-    if (found) openMemo(found);
-  }, [open, focusMemoId, memos, openMemo]);
+    if (found) openPreview(found);
+  }, [open, focusMemoId, memos, openPreview]);
 
   function openNew() {
+    setPreview(null);
     setEditing("new");
     setTitle("");
     setContent("");
@@ -143,6 +184,7 @@ export default function NotesPanel({
       if (!res.ok) throw new Error(d?.error || "Could not save note");
       toast.success("Note saved");
       setEditing(null);
+      setPreview(null);
       load();
       onChanged?.();
     } catch (err: any) {
@@ -159,6 +201,7 @@ export default function NotesPanel({
       if (!res.ok) throw new Error("Could not delete note");
       toast.success("Note deleted");
       setEditing(null);
+      setPreview(null);
       load();
       onChanged?.();
     } catch (err: any) {
@@ -180,9 +223,12 @@ export default function NotesPanel({
       <div className="animate-slide-in-right fixed inset-y-0 right-0 z-50 flex w-[440px] max-w-[92vw] flex-col border-l border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
         {/* Header */}
         <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-          {editing !== null ? (
+          {editing !== null || preview ? (
             <button
-              onClick={() => setEditing(null)}
+              onClick={() => {
+                setEditing(null);
+                setPreview(null);
+              }}
               aria-label="Back to list"
               className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800"
             >
@@ -190,11 +236,13 @@ export default function NotesPanel({
             </button>
           ) : null}
           <h2 className="text-base font-semibold">
-            {editing === null
-              ? "Notes"
-              : editing === "new"
-                ? "New note"
-                : "Edit note"}
+            {editing === "new"
+              ? "New note"
+              : editing !== null
+                ? "Edit note"
+                : preview
+                  ? "Note"
+                  : "Notes"}
           </h2>
           <button
             onClick={onClose}
@@ -206,7 +254,7 @@ export default function NotesPanel({
         </div>
 
         {/* ---- List view ---- */}
-        {editing === null && (
+        {editing === null && !preview && (
           <>
             <div className="px-4 py-3">
               <Button className="w-full" onClick={openNew}>
@@ -229,7 +277,7 @@ export default function NotesPanel({
               ) : memos.length === 0 ? (
                 <p className="px-4 py-10 text-center text-sm text-slate-400">
                   No notes yet. Create one to jot down a memo, a to-do list, or
-                  a reminder.
+                  a deadline.
                 </p>
               ) : (
                 <div className="flex flex-col gap-1">
@@ -253,17 +301,87 @@ export default function NotesPanel({
                       <span className="line-clamp-1 text-xs text-slate-400">
                         {plainText(m.content) || "Empty note"}
                       </span>
-                      {m.remindAt && (
-                        <span className="mt-0.5 inline-flex w-fit items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-                          ⏰ {fmtRemind(m.remindAt)}
-                        </span>
-                      )}
+                      {m.remindAt &&
+                        (() => {
+                          const { text, overdue } = timeLeft(m.remindAt);
+                          return (
+                            <span
+                              className={`mt-0.5 inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[11px] ${
+                                overdue
+                                  ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                                  : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                              }`}
+                            >
+                              ⏳ {text}
+                            </span>
+                          );
+                        })()}
                     </button>
                   ))}
                 </div>
               )}
             </div>
           </>
+        )}
+
+        {/* ---- Preview view (read-only) ---- */}
+        {preview && editing === null && (
+          <div className="flex flex-1 flex-col overflow-y-auto px-4 py-3">
+            <h3 className="mb-3 text-lg font-semibold">{preview.title}</h3>
+            <div
+              className="rte-content rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 dark:border-slate-700 dark:text-slate-100 [&_input]:pointer-events-none"
+              dangerouslySetInnerHTML={{
+                __html:
+                  preview.content || '<p class="text-slate-400">Empty note</p>',
+              }}
+            />
+            <div className="mt-4 flex flex-col gap-2 text-sm">
+              {preview.groupId && (
+                <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: colorForKey(preview.groupId) }}
+                  />
+                  {groupName(preview.groupId)}
+                </div>
+              )}
+              {preview.remindAt &&
+                (() => {
+                  const { text, overdue } = timeLeft(preview.remindAt);
+                  return (
+                    <div className="flex flex-col gap-1">
+                      <div className="text-xs uppercase tracking-wide text-slate-400">
+                        Deadline
+                      </div>
+                      <div className="text-slate-600 dark:text-slate-300">
+                        ⏳ {fmtRemind(preview.remindAt)}
+                      </div>
+                      <div
+                        className={`text-sm font-semibold ${
+                          overdue
+                            ? "text-red-600 dark:text-red-400"
+                            : "text-emerald-600 dark:text-emerald-400"
+                        }`}
+                      >
+                        {text}
+                      </div>
+                    </div>
+                  );
+                })()}
+            </div>
+            <div className="mt-5 flex items-center gap-2 pb-2">
+              <Button onClick={() => openMemo(preview)} className="flex-1">
+                Edit
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setConfirmDel(preview.id)}
+                className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-950/30"
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
         )}
 
         {/* ---- Editor view ---- */}
@@ -303,7 +421,7 @@ export default function NotesPanel({
 
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">
-                  Reminder
+                  Deadline
                 </label>
                 {remind ? (
                   <div className="flex items-center gap-2">
@@ -313,7 +431,7 @@ export default function NotesPanel({
                     <button
                       onClick={() => setRemind("")}
                       className="rounded-lg border border-slate-200 px-2.5 py-2 text-sm text-slate-500 transition hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-                      title="Remove reminder"
+                      title="Remove deadline"
                     >
                       ✕
                     </button>
@@ -327,12 +445,12 @@ export default function NotesPanel({
                     }}
                     className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500 transition hover:border-slate-400 hover:text-slate-700 dark:border-slate-600 dark:hover:text-slate-300"
                   >
-                    ⏰ Add a reminder date
+                    ⏳ Add a deadline
                   </button>
                 )}
                 {remind && (
                   <p className="mt-1 text-xs text-slate-400">
-                    Shows on the selected calendar that day.
+                    Shows on the linked calendar on that day.
                   </p>
                 )}
               </div>

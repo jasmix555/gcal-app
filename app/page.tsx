@@ -21,6 +21,18 @@ interface GroupSummary {
   isPersonal: boolean;
 }
 
+const dpad = (n: number) => String(n).padStart(2, "0");
+const dateStr = (d: Date) =>
+  `${d.getFullYear()}-${dpad(d.getMonth() + 1)}-${dpad(d.getDate())}`;
+
+/** Shift a "YYYY-MM-DD" string by whole days (timezone-safe). */
+function shiftDateStr(s: string, days: number) {
+  const [y, m, d] = s.split("T")[0].split("-").map(Number);
+  const dt = new Date(y, (m || 1) - 1, d || 1);
+  dt.setDate(dt.getDate() + days);
+  return dateStr(dt);
+}
+
 // Safely read an error message even if the response body is empty/non-JSON.
 async function errorMessage(res: Response, fallback: string) {
   const data = await res.json().catch(() => null);
@@ -120,13 +132,13 @@ export default function Home() {
       toast("No calendar available yet.");
       return;
     }
-    const start = new Date();
-    start.setSeconds(0, 0); // current time, 1-hour timed event (not all-day)
+    // Default to an all-day event for today (inclusive single day).
+    const today = dateStr(new Date());
     setModalEvent({
       title: "",
-      start: start.toISOString(),
-      end: new Date(start.getTime() + 3600000).toISOString(),
-      allDay: false,
+      start: today,
+      end: today,
+      allDay: true,
     });
     setCanDelete(false);
   }
@@ -170,17 +182,14 @@ export default function Home() {
 
   const handleSelectRange = useCallback(
     (range: { start: string; end: string; allDay: boolean }) => {
-      let { start, end, allDay } = range;
-      // A single day clicked in month view comes back as an all-day, day-long
-      // range. Default that to a 1-hour timed event at the current time instead.
-      const span = new Date(end).getTime() - new Date(start).getTime();
-      if (allDay && span <= 24 * 3600 * 1000) {
-        const now = new Date();
-        const s = new Date(start);
-        s.setHours(now.getHours(), now.getMinutes(), 0, 0);
-        start = s.toISOString();
-        end = new Date(s.getTime() + 3600 * 1000).toISOString();
-        allDay = false;
+      let { start, end } = range;
+      const { allDay } = range;
+      // All-day grid selections come back with an EXCLUSIVE end (the day after).
+      // Convert to an inclusive end date for the modal (timezone-safe).
+      if (allDay) {
+        start = start.slice(0, 10);
+        const inclusive = shiftDateStr(end, -1);
+        end = inclusive < start ? start : inclusive;
       }
       setModalEvent({ title: "", start, end, allDay });
       setCanDelete(false);

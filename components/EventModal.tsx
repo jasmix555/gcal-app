@@ -158,7 +158,9 @@ export default function EventModal({
   );
   const [activities, setActivities] = useState<Activity[]>([]);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [members, setMembers] = useState<Attendee[]>([]);
   const [guestEmail, setGuestEmail] = useState("");
+  const [guestPickerOpen, setGuestPickerOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [mode, setMode] = useState<"view" | "edit">(event.id ? "view" : "edit");
   const [proposing, setProposing] = useState(false);
@@ -197,6 +199,27 @@ export default function EventModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event]);
+
+  // Members of the chosen calendar — offered as a quick "add guest" dropdown.
+  useEffect(() => {
+    if (!targetGroupId) {
+      setMembers([]);
+      return;
+    }
+    fetch(`/api/groups/${targetGroupId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setMembers(
+          (d.members || []).map((m: any) => ({
+            id: m.id,
+            name: m.name,
+            email: m.email,
+          }))
+        );
+      })
+      .catch(() => {});
+  }, [targetGroupId]);
 
   const isEdit = Boolean(form.id);
   const myAttendee = attendees.find((a) => a.id && a.id === myId);
@@ -489,7 +512,7 @@ export default function EventModal({
                 <div>
                   <label className={label}>Calendar</label>
                   <select
-                    className={input}
+                    className={`${input} pr-9`}
                     value={targetGroupId || ""}
                     onChange={(e) => setTargetGroupId(e.target.value)}
                   >
@@ -512,15 +535,6 @@ export default function EventModal({
                   placeholder="Add a title"
                 />
               </div>
-
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={!!form.allDay}
-                  onChange={(e) => update("allDay", e.target.checked)}
-                />
-                All day
-              </label>
 
               <div className="flex flex-col gap-2.5 sm:flex-row">
                 <div className="flex-1">
@@ -545,14 +559,80 @@ export default function EventModal({
                 </div>
               </div>
 
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={!!form.allDay}
+                  onChange={(e) => update("allDay", e.target.checked)}
+                />
+                All day
+              </label>
+
               {/* Guests / attendees */}
               <div>
                 <label className={label}>Guests</label>
+                {members.filter((m) => m.id !== myId).length > 0 && (
+                  <div className="relative mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setGuestPickerOpen((o) => !o)}
+                      className={`${input} flex items-center justify-between`}
+                    >
+                      <span className="text-slate-500 dark:text-slate-400">
+                        Add calendar members…
+                      </span>
+                      <span className="text-slate-400">▾</span>
+                    </button>
+                    {guestPickerOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-10"
+                          onClick={() => setGuestPickerOpen(false)}
+                        />
+                        <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                          {members
+                            .filter((m) => m.id !== myId)
+                            .map((m) => {
+                              const checked = attendees.some(
+                                (a) => a.email === m.email
+                              );
+                              return (
+                                <label
+                                  key={m.id || m.email}
+                                  className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-700"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() =>
+                                      setAttendees((arr) =>
+                                        checked
+                                          ? arr.filter(
+                                              (a) => a.email !== m.email
+                                            )
+                                          : [
+                                              ...arr,
+                                              { ...m, status: "INVITED" },
+                                            ]
+                                      )
+                                    }
+                                  />
+                                  <span className="truncate">
+                                    {m.name || m.email}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
                 <form className="flex gap-2" onSubmit={addGuest}>
                   <input
                     className={input}
                     type="email"
-                    placeholder="Add guest by email"
+                    placeholder="Or add guest by email"
                     value={guestEmail}
                     onChange={(e) => setGuestEmail(e.target.value)}
                   />
@@ -561,11 +641,11 @@ export default function EventModal({
                   </Button>
                 </form>
                 {attendees.length > 0 && (
-                  <div className="mt-2 flex flex-col gap-1">
+                  <div className="mt-2 flex flex-wrap gap-1.5">
                     {attendees.map((a) => (
                       <div
                         key={a.email}
-                        className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-sm dark:bg-slate-800"
+                        className="inline-flex w-fit max-w-full items-center gap-1.5 rounded-full bg-slate-100 py-1 pl-3 pr-1 text-sm dark:bg-slate-800"
                       >
                         <span className="truncate">{a.name || a.email}</span>
                         {a.status && a.status !== "INVITED" && (
@@ -579,7 +659,7 @@ export default function EventModal({
                           type="button"
                           onClick={() => removeGuest(a.email)}
                           aria-label={`Remove ${a.email}`}
-                          className="ml-auto text-slate-400 hover:text-red-600"
+                          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs text-slate-400 transition hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950/40"
                         >
                           ✕
                         </button>
