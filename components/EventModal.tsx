@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import DateTimeField from "@/components/DateTimeField";
 import { colorForKey } from "@/lib/colors";
+import Avatar from "@/components/Avatar";
 
 export interface EditableEvent {
   id?: string;
@@ -26,14 +27,24 @@ export interface EditableEvent {
   end: string;
   allDay?: boolean;
   attendees?: string[]; // emails (sent on save)
-  createdBy?: { id?: string; name?: string | null; email?: string | null };
-  updatedBy?: { name?: string | null; email?: string | null } | null;
+  createdBy?: {
+    id?: string;
+    name?: string | null;
+    email?: string | null;
+    image?: string | null;
+  };
+  updatedBy?: {
+    name?: string | null;
+    email?: string | null;
+    image?: string | null;
+  } | null;
 }
 
 interface Attendee {
   id?: string;
   name?: string | null;
   email: string;
+  image?: string | null;
   status?: string;
 }
 
@@ -215,6 +226,7 @@ export default function EventModal({
             id: m.id,
             name: m.name,
             email: m.email,
+            image: m.image,
           }))
         );
       })
@@ -493,10 +505,26 @@ export default function EventModal({
                 </div>
               )}
 
-              <div className="mt-4 flex flex-col gap-1 border-t border-slate-200 pl-[26px] pt-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
-                <div>Created by {who(form.createdBy)}</div>
+              <div className="mt-4 flex flex-col gap-1.5 border-t border-slate-200 pl-[26px] pt-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                <div className="flex items-center gap-1.5">
+                  <Avatar
+                    src={form.createdBy?.image}
+                    name={form.createdBy?.name}
+                    email={form.createdBy?.email}
+                    className="h-5 w-5"
+                  />
+                  Created by {who(form.createdBy)}
+                </div>
                 {form.updatedBy && (
-                  <div>Last edited by {who(form.updatedBy)}</div>
+                  <div className="flex items-center gap-1.5">
+                    <Avatar
+                      src={form.updatedBy?.image}
+                      name={form.updatedBy?.name}
+                      email={form.updatedBy?.email}
+                      className="h-5 w-5"
+                    />
+                    Last edited by {who(form.updatedBy)}
+                  </div>
                 )}
               </div>
             </div>
@@ -645,8 +673,14 @@ export default function EventModal({
                     {attendees.map((a) => (
                       <div
                         key={a.email}
-                        className="inline-flex w-fit max-w-full items-center gap-1.5 rounded-full bg-slate-100 py-1 pl-3 pr-1 text-sm dark:bg-slate-800"
+                        className="inline-flex w-fit max-w-full items-center gap-1.5 rounded-full bg-slate-100 py-1 pl-2 pr-1 text-sm dark:bg-slate-800"
                       >
+                        <Avatar
+                          src={a.image}
+                          name={a.name}
+                          email={a.email}
+                          className="h-5 w-5"
+                        />
                         <span className="truncate">{a.name || a.email}</span>
                         {a.status && a.status !== "INVITED" && (
                           <span

@@ -34,6 +34,7 @@ function serialize(e: any) {
       id: a.user.id,
       name: a.user.name,
       email: a.user.email,
+      image: a.user.image,
       status: a.status,
       proposedStart: a.proposedStart ? a.proposedStart.toISOString() : null,
       proposedEnd: a.proposedEnd ? a.proposedEnd.toISOString() : null,

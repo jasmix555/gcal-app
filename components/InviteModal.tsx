@@ -14,12 +14,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import { colorForKey } from "@/lib/colors";
+import Avatar from "@/components/Avatar";
 
 interface Member {
   id: string;
   name?: string | null;
   email?: string | null;
+  image?: string | null;
   role: string;
 }
 
@@ -291,9 +292,11 @@ export default function InviteModal({
                   key={m.id}
                   className="group relative flex items-center gap-2 rounded-lg px-1 py-1.5"
                 >
-                  <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: colorForKey(m.id || m.email) }}
+                  <Avatar
+                    src={m.image}
+                    name={m.name}
+                    email={m.email}
+                    colorKey={m.id || m.email}
                   />
                   <div className="min-w-0">
                     <div className="truncate text-sm">
