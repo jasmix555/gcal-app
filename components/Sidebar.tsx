@@ -13,6 +13,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -408,6 +409,9 @@ export default function Sidebar({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New calendar</DialogTitle>
+            <DialogDescription className="sr-only">
+              Create a new calendar
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={createGroup} className="flex flex-col gap-3">
             <input
@@ -438,6 +442,9 @@ export default function Sidebar({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Join a calendar</DialogTitle>
+            <DialogDescription className="sr-only">
+              Join a calendar with an invite code
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={joinByCode} className="flex flex-col gap-3">
             <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -471,6 +478,9 @@ export default function Sidebar({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Rename calendar</DialogTitle>
+            <DialogDescription className="sr-only">
+              Rename this calendar
+            </DialogDescription>
           </DialogHeader>
           <input
             autoFocus

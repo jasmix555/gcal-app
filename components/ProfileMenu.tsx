@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -329,6 +330,9 @@ export default function ProfileMenu({ user, onResetDone }: Props) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit name</DialogTitle>
+            <DialogDescription className="sr-only">
+              Change your display name
+            </DialogDescription>
           </DialogHeader>
           <input
             autoFocus
@@ -354,6 +358,9 @@ export default function ProfileMenu({ user, onResetDone }: Props) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Change photo</DialogTitle>
+            <DialogDescription className="sr-only">
+              Update your profile photo
+            </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center gap-3">
             {photo ? (
@@ -408,6 +415,9 @@ export default function ProfileMenu({ user, onResetDone }: Props) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Change password</DialogTitle>
+            <DialogDescription className="sr-only">
+              Set a new password
+            </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <input

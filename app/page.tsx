@@ -54,6 +54,10 @@ export default function Home() {
   const [isMobile, setIsMobile] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [focusMemo, setFocusMemo] = useState<string | null>(null);
+  const [live, setLive] = useState(false);
+  // Bumped by the change poll to tell the bell / notes panel to refetch.
+  const [notifTick, setNotifTick] = useState(0);
+  const [notesTick, setNotesTick] = useState(0);
 
   useEffect(() => {
     setMounted(true);
@@ -108,6 +112,45 @@ export default function Home() {
       /* ignore */
     }
   }, [visibleIds]);
+
+  // Near-real-time sync: poll a cheap change-signature for the visible
+  // calendars and refetch only when it moves. Light on the DB (each poll
+  // releases its connection immediately) and pauses while the tab is hidden.
+  const visibleKey = visibleIds.join(",");
+  useEffect(() => {
+    if (status !== "authenticated" || !visibleKey) {
+      setLive(false);
+      return;
+    }
+    let last: string | null = null;
+    let stopped = false;
+
+    async function poll() {
+      try {
+        const res = await fetch(
+          `/api/changes?groupIds=${encodeURIComponent(visibleKey)}`
+        );
+        if (!res.ok) throw new Error("poll failed");
+        const d = await res.json();
+        if (stopped) return;
+        setLive(true);
+        if (last !== null && d.sig !== last) calRef.current?.refetch();
+        last = d.sig;
+      } catch {
+        if (!stopped) setLive(false);
+      }
+    }
+
+    poll();
+    const t = setInterval(() => {
+      if (!document.hidden) poll();
+    }, 5000);
+    return () => {
+      stopped = true;
+      clearInterval(t);
+      setLive(false);
+    };
+  }, [status, visibleKey]);
 
   const myId = (session?.user as any)?.id as string | undefined;
   const defaultGroupId =
@@ -321,6 +364,19 @@ export default function Home() {
             </svg>
           </button>
           <div className="ml-auto flex items-center gap-2">
+            <span
+              title={live ? "Live — updates in real time" : "Reconnecting…"}
+              className="flex items-center gap-1.5 rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400 sm:px-2.5"
+            >
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  live
+                    ? "animate-pulse bg-emerald-500"
+                    : "bg-slate-300 dark:bg-slate-600"
+                }`}
+              />
+              {live ? "Live" : "Offline"}
+            </span>
             <button
               onClick={() => {
                 setFocusMemo(null);

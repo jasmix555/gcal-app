@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -352,6 +353,9 @@ export default function EventModal({
           if (t?.closest?.("[data-dt-popover]")) e.preventDefault();
         }}
       >
+        <DialogDescription className="sr-only">
+          Event details and actions
+        </DialogDescription>
         {mode === "view" ? (
           <>
             <div className="flex items-center justify-end gap-1 px-3 pb-1 pr-12 pt-3">
