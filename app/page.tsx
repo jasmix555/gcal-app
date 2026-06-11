@@ -244,13 +244,8 @@ export default function Home() {
     []
   );
 
-  if (status === "loading") {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-slate-500">
-        Loading…
-      </div>
-    );
-  }
+  // No full-page loader: render the app shell straight away and let the
+  // per-section skeletons (sidebar, calendar, notifications) cover loading.
   if (status === "unauthenticated") {
     if (typeof window !== "undefined") window.location.href = "/login";
     return null;
