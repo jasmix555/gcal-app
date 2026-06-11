@@ -51,6 +51,8 @@ interface Props {
   }) => void;
   onMemoClick?: (memoId: string) => void;
   onDateClick?: (info: { dateStr: string; allDay: boolean }) => void;
+  /** Per-calendar custom colors (id → hex). Falls back to a hashed color. */
+  groupColors?: Record<string, string | null>;
 }
 
 const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
@@ -61,12 +63,17 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
     onReschedule,
     onMemoClick,
     onDateClick,
+    groupColors,
   },
   ref
 ) {
   const calRef = useRef<FullCalendar>(null);
   const groupIdsRef = useRef<string[]>(groupIds);
+  const groupColorsRef = useRef<Record<string, string | null>>(
+    groupColors || {}
+  );
   const groupKey = groupIds.join(",");
+  const colorKey = JSON.stringify(groupColors || {});
   const [loading, setLoading] = useState(false);
   // Show a full skeleton only until the first load finishes; later refetches
   // just get the small corner badge so existing events stay visible.
@@ -91,6 +98,13 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
     calRef.current?.getApi().refetchEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupKey]);
+
+  // Recolor events when a calendar's color changes.
+  useEffect(() => {
+    groupColorsRef.current = groupColors || {};
+    calRef.current?.getApi().refetchEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colorKey]);
 
   useImperativeHandle(ref, () => ({
     refetch: () => calRef.current?.getApi().refetchEvents(),
@@ -126,8 +140,9 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
           throw new Error(data.error || "Failed to load events");
 
         const eventItems = data.events.map((e: CalendarEvent) => {
-          // Always color an event by its calendar (matches the sidebar checkbox).
-          const color = colorForKey(e.groupId);
+          // Color an event by its calendar's custom color (matches the sidebar).
+          const color =
+            groupColorsRef.current[e.groupId || ""] || colorForKey(e.groupId);
           // All-day → solid fill at 100%. Timed → lighter tinted fill with the
           // full color as the border + text (Google-style).
           const styled = e.allDay
@@ -167,7 +182,9 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
           memoItems = (md.memos || [])
             .filter((m: any) => m.remindAt)
             .map((m: any) => {
-              const color = m.groupId ? colorForKey(m.groupId) : "#f59e0b";
+              const color = m.groupId
+                ? groupColorsRef.current[m.groupId] || colorForKey(m.groupId)
+                : "#f59e0b";
               return {
                 id: `memo-${m.id}`,
                 title: `📝 ${m.title}`,

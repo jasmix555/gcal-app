@@ -25,6 +25,7 @@ import { toast } from "sonner";
 interface GroupSummary {
   id: string;
   name: string;
+  color?: string | null;
   role: string;
   memberCount: number;
   isPersonal: boolean;
@@ -469,6 +470,9 @@ export default function Home() {
               <CalendarView
                 ref={calRef}
                 groupIds={visibleIds}
+                groupColors={Object.fromEntries(
+                  groups.map((g) => [g.id, g.color || null])
+                )}
                 onEventClick={openExisting}
                 onSelectRange={handleSelectRange}
                 onReschedule={handleReschedule}

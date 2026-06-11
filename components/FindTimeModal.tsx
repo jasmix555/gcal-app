@@ -208,7 +208,7 @@ export default function FindTimeModal({
               </p>
             ) : (
               <select
-                className={`${input} pr-9`}
+                className={`${input} select-chevron`}
                 value={groupId}
                 onChange={(e) => setGroupId(e.target.value)}
               >
@@ -284,7 +284,7 @@ export default function FindTimeModal({
             <div>
               <label className={label}>Duration</label>
               <select
-                className={`${input} pr-8`}
+                className={`${input} select-chevron`}
                 value={duration}
                 onChange={(e) => setDuration(Number(e.target.value))}
               >
@@ -297,7 +297,7 @@ export default function FindTimeModal({
             <div>
               <label className={label}>Day from</label>
               <select
-                className={`${input} pr-8`}
+                className={`${input} select-chevron`}
                 value={dayStart}
                 onChange={(e) => setDayStart(Number(e.target.value))}
               >
@@ -311,7 +311,7 @@ export default function FindTimeModal({
             <div>
               <label className={label}>Day to</label>
               <select
-                className={`${input} pr-8`}
+                className={`${input} select-chevron`}
                 value={dayEnd}
                 onChange={(e) => setDayEnd(Number(e.target.value))}
               >

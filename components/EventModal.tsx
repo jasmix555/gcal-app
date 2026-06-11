@@ -560,7 +560,7 @@ export default function EventModal({
                 <div>
                   <label className={label}>Calendar</label>
                   <select
-                    className={`${input} pr-9`}
+                    className={`${input} select-chevron`}
                     value={targetGroupId || ""}
                     onChange={(e) => setTargetGroupId(e.target.value)}
                   >

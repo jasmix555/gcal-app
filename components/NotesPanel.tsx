@@ -429,7 +429,7 @@ export default function NotesPanel({
                   Calendar
                 </label>
                 <select
-                  className={input}
+                  className={`${input} select-chevron`}
                   value={groupId}
                   onChange={(e) => setGroupId(e.target.value)}
                 >

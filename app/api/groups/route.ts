@@ -20,7 +20,7 @@ export async function GET() {
       data: {
         name: "Personal",
         isPersonal: true,
-        memberships: { create: { userId, role: "OWNER" } },
+        memberships: { create: { userId, role: "OWNER", position: 0 } },
       },
     });
   }
@@ -32,21 +32,18 @@ export async function GET() {
         include: { _count: { select: { memberships: true } } },
       },
     },
-    orderBy: { createdAt: "asc" },
+    // Respect the user's custom order; fall back to creation order.
+    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
   });
 
   const groups = memberships.map((m) => ({
     id: m.group.id,
     name: m.group.name,
+    color: m.group.color,
     role: m.role,
     memberCount: m.group._count.memberships,
     isPersonal: m.group.isPersonal,
   }));
-
-  // Personal calendar first.
-  groups.sort((a, b) =>
-    a.isPersonal === b.isPersonal ? 0 : a.isPersonal ? -1 : 1
-  );
 
   return NextResponse.json({ groups });
 }
@@ -66,10 +63,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Append new calendars to the end of the user's list.
+  const count = await prisma.membership.count({ where: { userId } });
+
   const group = await prisma.group.create({
     data: {
       name: String(name).trim(),
-      memberships: { create: { userId, role: "OWNER" } },
+      memberships: { create: { userId, role: "OWNER", position: count } },
     },
   });
 

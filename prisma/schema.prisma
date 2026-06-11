@@ -79,6 +79,7 @@ model VerificationToken {
 model Group {
   id         String   @id @default(cuid())
   name       String
+  color      String? // hex color for the whole calendar (all its events)
   joinCode   String?  @unique // reusable code for the shareable group invite link
   isPersonal Boolean  @default(false) // a user's private "only me" calendar
   createdAt  DateTime @default(now())
@@ -100,6 +101,7 @@ model Membership {
   userId    String
   groupId   String
   role      Role     @default(MEMBER)
+  position  Int      @default(0) // per-user ordering of calendars in the sidebar
   createdAt DateTime @default(now())
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)

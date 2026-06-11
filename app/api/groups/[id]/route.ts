@@ -55,29 +55,40 @@ export async function PATCH(
   }
   if (membership.role !== "OWNER" && membership.role !== "ADMIN") {
     return NextResponse.json(
-      { error: "Only owners and admins can rename a calendar." },
+      { error: "Only owners and admins can edit a calendar." },
       { status: 403 }
     );
   }
 
   const group = await prisma.group.findUnique({ where: { id: params.id } });
   if (!group) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (group.isPersonal) {
-    return NextResponse.json(
-      { error: "The personal calendar can't be renamed." },
-      { status: 400 }
-    );
+
+  const body = await req.json();
+  const data: { name?: string; color?: string | null } = {};
+
+  if (body.name !== undefined) {
+    if (group.isPersonal) {
+      return NextResponse.json(
+        { error: "The personal calendar can't be renamed." },
+        { status: 400 }
+      );
+    }
+    const n = String(body.name).trim();
+    if (!n) {
+      return NextResponse.json({ error: "Name is required." }, { status: 400 });
+    }
+    data.name = n;
   }
 
-  const { name } = await req.json();
-  if (!name || !String(name).trim()) {
-    return NextResponse.json({ error: "Name is required." }, { status: 400 });
+  if (body.color !== undefined) {
+    data.color = body.color ? String(body.color) : null;
   }
 
-  await prisma.group.update({
-    where: { id: params.id },
-    data: { name: String(name).trim() },
-  });
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
+  }
+
+  await prisma.group.update({ where: { id: params.id }, data });
   return NextResponse.json({ ok: true });
 }
 

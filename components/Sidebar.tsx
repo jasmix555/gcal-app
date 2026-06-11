@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { colorForKey } from "@/lib/colors";
@@ -21,10 +21,27 @@ import { Button } from "@/components/ui/button";
 interface GroupSummary {
   id: string;
   name: string;
+  color?: string | null;
   role: string;
   memberCount: number;
   isPersonal?: boolean;
 }
+
+// Calendar color choices (vivid, readable on white/dark event blocks).
+const CALENDAR_COLORS = [
+  "#2563eb",
+  "#059669",
+  "#7c3aed",
+  "#d97706",
+  "#e11d48",
+  "#0891b2",
+  "#4f46e5",
+  "#0d9488",
+  "#ea580c",
+  "#db2777",
+  "#475569",
+  "#16a34a",
+];
 
 interface Props {
   user?: { name?: string | null; email?: string | null; image?: string | null };
@@ -81,6 +98,61 @@ export default function Sidebar({
     id: string;
     name: string;
   } | null>(null);
+  const [colorFor, setColorFor] = useState<{
+    id: string;
+    name: string;
+    color?: string | null;
+  } | null>(null);
+
+  // Local drag-reorder order (ids); synced from props, reordered live on drag.
+  const [order, setOrder] = useState<string[]>([]);
+  const dragId = useRef<string | null>(null);
+  useEffect(() => {
+    setOrder(groups.map((g) => g.id));
+  }, [groups]);
+
+  function onDragEnterRow(id: string) {
+    const from = dragId.current;
+    if (!from || from === id) return;
+    setOrder((prev) => {
+      const a = prev.indexOf(from);
+      const b = prev.indexOf(id);
+      if (a < 0 || b < 0) return prev;
+      const next = [...prev];
+      next.splice(b, 0, next.splice(a, 1)[0]);
+      return next;
+    });
+  }
+
+  async function persistOrder() {
+    const ids = order;
+    dragId.current = null;
+    try {
+      await fetch("/api/groups/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order: ids }),
+      });
+      onGroupsChanged();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function setCalendarColor(id: string, color: string | null) {
+    setColorFor(null);
+    try {
+      const res = await fetch(`/api/groups/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ color }),
+      });
+      if (!res.ok) throw new Error("Could not update color");
+      onGroupsChanged();
+    } catch (err: any) {
+      toast.error(err.message || "Could not update color");
+    }
+  }
 
   async function createGroup(e: React.FormEvent) {
     e.preventDefault();
@@ -190,6 +262,13 @@ export default function Sidebar({
     return acc;
   }, {});
 
+  // Render in the user's drag order (falls back to server order before sync).
+  const orderedGroups: GroupSummary[] = order.length
+    ? (order
+        .map((id) => groups.find((g) => g.id === id))
+        .filter(Boolean) as GroupSummary[])
+    : groups;
+
   return (
     <aside className="animate-fade-in flex h-full w-[300px] max-w-[85vw] shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
       <h1 className="text-lg font-semibold">📅 Team Calendar</h1>
@@ -272,19 +351,32 @@ export default function Sidebar({
                 <Skeleton className="h-3.5 w-32" />
               </div>
             ))}
-          {groups.map((g) => {
+          {orderedGroups.map((g) => {
             const visible = visibleIds.includes(g.id);
-            const color = colorForKey(g.id);
+            const color = g.color || colorForKey(g.id);
             const canManage =
               !g.isPersonal && (g.role === "OWNER" || g.role === "ADMIN");
             const canDelete = !g.isPersonal && g.role === "OWNER";
             const canLeave = !g.isPersonal && g.role !== "OWNER";
-            const hasMenu = !g.isPersonal;
+            const canColor = g.role === "OWNER" || g.role === "ADMIN";
+            const hasMenu = true;
             return (
               <div
                 key={g.id}
-                className="group relative flex items-center gap-2 rounded-lg px-1.5 py-1.5 text-sm transition hover:bg-slate-100 dark:hover:bg-slate-800"
+                draggable
+                onDragStart={() => (dragId.current = g.id)}
+                onDragEnter={() => onDragEnterRow(g.id)}
+                onDragOver={(e) => e.preventDefault()}
+                onDragEnd={persistOrder}
+                className="group relative flex items-center gap-1.5 rounded-lg px-1.5 py-1.5 text-sm transition hover:bg-slate-100 dark:hover:bg-slate-800"
               >
+                <span
+                  className="shrink-0 cursor-grab text-slate-300 opacity-0 transition group-hover:opacity-100 active:cursor-grabbing dark:text-slate-600"
+                  title="Drag to reorder"
+                  aria-hidden
+                >
+                  ⠿
+                </span>
                 <input
                   type="checkbox"
                   checked={visible}
@@ -317,20 +409,37 @@ export default function Sidebar({
                       onClick={() => setMenuId(null)}
                     />
                     <div className="absolute right-1 top-9 z-50 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
-                      <button
-                        className={menuItem}
-                        onClick={() => {
-                          setManage({
-                            id: g.id,
-                            name: g.name,
-                            role: g.role,
-                            tab: "members",
-                          });
-                          setMenuId(null);
-                        }}
-                      >
-                        Members
-                      </button>
+                      {!g.isPersonal && (
+                        <button
+                          className={menuItem}
+                          onClick={() => {
+                            setManage({
+                              id: g.id,
+                              name: g.name,
+                              role: g.role,
+                              tab: "members",
+                            });
+                            setMenuId(null);
+                          }}
+                        >
+                          Members
+                        </button>
+                      )}
+                      {canColor && (
+                        <button
+                          className={menuItem}
+                          onClick={() => {
+                            setColorFor({
+                              id: g.id,
+                              name: g.name,
+                              color: g.color,
+                            });
+                            setMenuId(null);
+                          }}
+                        >
+                          Change color
+                        </button>
+                      )}
                       {canManage && (
                         <button
                           className={menuItem}
@@ -496,6 +605,61 @@ export default function Sidebar({
             </Button>
             <Button onClick={doRename} disabled={!renameValue.trim()}>
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Calendar color dialog */}
+      <Dialog open={!!colorFor} onOpenChange={(o) => !o && setColorFor(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {colorFor ? `Color for “${colorFor.name}”` : "Calendar color"}
+            </DialogTitle>
+            <DialogDescription>
+              Sets the color of every event on this calendar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-6 gap-3 py-1">
+            {CALENDAR_COLORS.map((c) => {
+              const sel = (colorFor?.color || "").toLowerCase() === c;
+              return (
+                <button
+                  key={c}
+                  onClick={() => colorFor && setCalendarColor(colorFor.id, c)}
+                  aria-label={c}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full transition hover:scale-110 ${
+                    sel
+                      ? "ring-2 ring-offset-2 ring-slate-400 dark:ring-offset-slate-900"
+                      : ""
+                  }`}
+                  style={{ backgroundColor: c }}
+                >
+                  {sel && (
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="white"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => colorFor && setCalendarColor(colorFor.id, null)}
+            >
+              Reset to default
             </Button>
           </DialogFooter>
         </DialogContent>
