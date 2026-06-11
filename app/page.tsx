@@ -121,7 +121,7 @@ export default function Home() {
       return;
     }
     const start = new Date();
-    start.setMinutes(0, 0, 0);
+    start.setSeconds(0, 0); // current time, 1-hour timed event (not all-day)
     setModalEvent({
       title: "",
       start: start.toISOString(),
@@ -170,12 +170,19 @@ export default function Home() {
 
   const handleSelectRange = useCallback(
     (range: { start: string; end: string; allDay: boolean }) => {
-      setModalEvent({
-        title: "",
-        start: range.start,
-        end: range.end,
-        allDay: range.allDay,
-      });
+      let { start, end, allDay } = range;
+      // A single day clicked in month view comes back as an all-day, day-long
+      // range. Default that to a 1-hour timed event at the current time instead.
+      const span = new Date(end).getTime() - new Date(start).getTime();
+      if (allDay && span <= 24 * 3600 * 1000) {
+        const now = new Date();
+        const s = new Date(start);
+        s.setHours(now.getHours(), now.getMinutes(), 0, 0);
+        start = s.toISOString();
+        end = new Date(s.getTime() + 3600 * 1000).toISOString();
+        allDay = false;
+      }
+      setModalEvent({ title: "", start, end, allDay });
       setCanDelete(false);
     },
     []

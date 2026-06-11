@@ -73,6 +73,16 @@ function toLocalInput(value: string, allDay?: boolean) {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16);
 }
 
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** Shift a "YYYY-MM-DD" (or ISO) date string by N whole days, keeping date-only. */
+function shiftDate(value: string, days: number): string {
+  const [y, m, d] = (value || "").split("T")[0].split("-").map(Number);
+  const dt = new Date(y || 1970, (m || 1) - 1, d || 1);
+  dt.setDate(dt.getDate() + days);
+  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+}
+
 function parseLocal(value: string, allDay?: boolean): Date {
   const [datePart, timePart = ""] = (value || "").split("T");
   const [y, m, d] = datePart.split("-").map(Number);
@@ -157,10 +167,17 @@ export default function EventModal({
   const [rsvpLoading, setRsvpLoading] = useState(false);
 
   useEffect(() => {
+    // All-day ends are stored exclusive (the day AFTER the event). Show the
+    // user an inclusive end date while editing an existing event.
+    let endVal = toLocalInput(event.end, event.allDay);
+    if (event.allDay && event.id) {
+      const inclusive = shiftDate(endVal, -1);
+      endVal = inclusive < event.start.slice(0, 10) ? endVal : inclusive;
+    }
     setForm({
       ...event,
       start: toLocalInput(event.start, event.allDay),
-      end: toLocalInput(event.end, event.allDay),
+      end: endVal,
     });
     setMode(event.id ? "view" : "edit");
     setProposing(false);
@@ -222,16 +239,25 @@ export default function EventModal({
       toast.error("Please enter a title.");
       return;
     }
+    let start: string;
+    let end: string;
+    if (form.allDay) {
+      const startDate = form.start.slice(0, 10);
+      let endInclusive = form.end.slice(0, 10);
+      if (endInclusive < startDate) endInclusive = startDate;
+      start = startDate;
+      // Store an exclusive end (day after) so a multi-day span renders fully.
+      end = shiftDate(endInclusive, 1);
+    } else {
+      start = new Date(form.start).toISOString();
+      end = new Date(form.end).toISOString();
+    }
     onSave({
       ...form,
       groupId: targetGroupId,
       attendees: attendees.map((a) => a.email),
-      start: form.allDay
-        ? form.start.slice(0, 10)
-        : new Date(form.start).toISOString(),
-      end: form.allDay
-        ? form.end.slice(0, 10)
-        : new Date(form.end).toISOString(),
+      start,
+      end,
     });
   }
 

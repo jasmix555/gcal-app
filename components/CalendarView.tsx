@@ -226,12 +226,12 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
             ? {
                 left: "prev,next",
                 center: "title",
-                right: "dayGridMonth,timeGridDay,listWeek",
+                right: "dayGridMonth,timeGridDay,listMonth",
               }
             : {
                 left: "prev,next today",
                 center: "title",
-                right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek",
+                right: "dayGridMonth,timeGridWeek,timeGridDay,listMonth",
               }
         }
         nowIndicator

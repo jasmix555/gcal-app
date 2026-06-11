@@ -147,7 +147,7 @@ export default function DateTimeField({ value, allDay, onChange }: Props) {
             ref={popRef}
             data-dt-popover
             style={{ position: "fixed", top: coords.top, left: coords.left }}
-            className="animate-rise-in z-[60] flex gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-800"
+            className="animate-rise-in pointer-events-auto z-[60] flex gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-800"
           >
             {/* Calendar */}
             <div className="w-56">

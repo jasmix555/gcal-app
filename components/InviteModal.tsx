@@ -431,7 +431,7 @@ export default function InviteModal({
           <>
             <div
               data-portal-menu
-              className="fixed inset-0 z-[60]"
+              className="pointer-events-auto fixed inset-0 z-[60]"
               onClick={() => setMenuFor(null)}
             />
             <div
@@ -441,7 +441,7 @@ export default function InviteModal({
                 top: menuCoords.top,
                 left: menuCoords.left,
               }}
-              className="z-[61] w-44 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800"
+              className="pointer-events-auto z-[61] w-44 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800"
             >
               {menuMember.role === "MEMBER" ? (
                 <button
