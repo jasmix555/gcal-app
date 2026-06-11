@@ -11,6 +11,7 @@ import EventModal, { EditableEvent } from "@/components/EventModal";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell from "@/components/NotificationBell";
 import NotesPanel from "@/components/NotesPanel";
+import FindTimeModal from "@/components/FindTimeModal";
 import { toast } from "sonner";
 
 interface GroupSummary {
@@ -53,6 +54,7 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [findOpen, setFindOpen] = useState(false);
   const [focusMemo, setFocusMemo] = useState<string | null>(null);
   const [live, setLive] = useState(false);
   // Bumped by the change poll to tell the bell / notes panel to refetch.
@@ -122,7 +124,7 @@ export default function Home() {
       setLive(false);
       return;
     }
-    let last: string | null = null;
+    let last: { events: string; memos: string; notif: string } | null = null;
     let stopped = false;
 
     async function poll() {
@@ -134,8 +136,16 @@ export default function Home() {
         const d = await res.json();
         if (stopped) return;
         setLive(true);
-        if (last !== null && d.sig !== last) calRef.current?.refetch();
-        last = d.sig;
+        if (last) {
+          // Calendar reacts to events + memo reminders.
+          if (d.events !== last.events || d.memos !== last.memos)
+            calRef.current?.refetch();
+          // Notes list reacts to memo changes.
+          if (d.memos !== last.memos) setNotesTick((n) => n + 1);
+          // Bell reacts to notifications + invitations.
+          if (d.notif !== last.notif) setNotifTick((n) => n + 1);
+        }
+        last = { events: d.events, memos: d.memos, notif: d.notif };
       } catch {
         if (!stopped) setLive(false);
       }
@@ -378,6 +388,27 @@ export default function Home() {
               {live ? "Live" : "Offline"}
             </span>
             <button
+              onClick={() => setFindOpen(true)}
+              aria-label="Find a time"
+              title="Find a time"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 7v5l3 2" />
+              </svg>
+              <span className="hidden sm:inline">Find a time</span>
+            </button>
+            <button
               onClick={() => {
                 setFocusMemo(null);
                 setNotesOpen(true);
@@ -404,6 +435,7 @@ export default function Home() {
               <span className="hidden sm:inline">Notes</span>
             </button>
             <NotificationBell
+              refreshSignal={notifTick}
               onOpenEvent={openEventById}
               onInvitationAccepted={(groupId) => {
                 loadGroups();
@@ -468,6 +500,25 @@ export default function Home() {
         />
       )}
 
+      <FindTimeModal
+        open={findOpen}
+        onClose={() => setFindOpen(false)}
+        groups={groups}
+        defaultGroupId={defaultGroupId}
+        onPick={(slot, guests, gid) => {
+          setFindOpen(false);
+          setModalEvent({
+            title: "",
+            start: slot.start,
+            end: slot.end,
+            allDay: false,
+            groupId: gid,
+            prefillAttendees: guests,
+          });
+          setCanDelete(false);
+        }}
+      />
+
       <NotesPanel
         open={notesOpen}
         onClose={() => {
@@ -477,6 +528,7 @@ export default function Home() {
         groups={groups}
         defaultGroupId={defaultGroupId}
         focusMemoId={focusMemo}
+        refreshSignal={notesTick}
         onChanged={() => calRef.current?.refetch()}
       />
     </div>

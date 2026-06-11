@@ -28,6 +28,12 @@ export interface EditableEvent {
   end: string;
   allDay?: boolean;
   attendees?: string[]; // emails (sent on save)
+  /** Pre-seed the guest list (e.g. from Find a time) for a brand-new event. */
+  prefillAttendees?: {
+    email: string;
+    name?: string | null;
+    image?: string | null;
+  }[];
   createdBy?: {
     id?: string;
     name?: string | null;
@@ -195,7 +201,17 @@ export default function EventModal({
     });
     setMode(event.id ? "view" : "edit");
     setProposing(false);
-    setAttendees([]);
+    // Seed guests from a "Find a time" pick on new events; otherwise empty.
+    setAttendees(
+      !event.id && event.prefillAttendees?.length
+        ? event.prefillAttendees.map((g) => ({
+            email: g.email,
+            name: g.name,
+            image: g.image,
+            status: "INVITED",
+          }))
+        : []
+    );
     setTargetGroupId(event.groupId ?? defaultGroupId ?? null);
     if (event.id) {
       fetch(`/api/events/${event.id}`)

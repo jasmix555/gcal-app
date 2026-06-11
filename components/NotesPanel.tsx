@@ -31,6 +31,8 @@ interface Props {
   defaultGroupId?: string | null;
   /** Open straight into a specific memo (e.g. from a calendar reminder click). */
   focusMemoId?: string | null;
+  /** Bumped by the app's change poll to refresh the list in near-real-time. */
+  refreshSignal?: number;
   onChanged?: () => void;
 }
 
@@ -83,6 +85,7 @@ export default function NotesPanel({
   groups,
   defaultGroupId,
   focusMemoId,
+  refreshSignal,
   onChanged,
 }: Props) {
   const [memos, setMemos] = useState<Memo[]>([]);
@@ -111,6 +114,12 @@ export default function NotesPanel({
   useEffect(() => {
     if (open) load();
   }, [open, load]);
+
+  // Near-real-time: reload the list when the change poll signals a memo change
+  // (only while viewing the list, so it won't disrupt an in-progress edit).
+  useEffect(() => {
+    if (open && refreshSignal && editing === null && !preview) load();
+  }, [refreshSignal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset to the list whenever the panel closes, so reopening doesn't leave you
   // stuck in a stale editor/preview (the component stays mounted while closed).

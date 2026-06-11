@@ -24,6 +24,16 @@ interface PendingInvite {
 interface Props {
   onOpenEvent: (eventId: string) => void;
   onInvitationAccepted: (groupId: string) => void;
+  /** Bumped by the app's change poll to trigger a refetch in near-real-time. */
+  refreshSignal?: number;
+}
+
+function tabCls(active: boolean) {
+  return `flex flex-1 items-center justify-center rounded-md py-1.5 text-sm font-medium transition ${
+    active
+      ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-slate-100"
+      : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+  }`;
 }
 
 function ago(iso: string) {
@@ -39,6 +49,7 @@ function ago(iso: string) {
 export default function NotificationBell({
   onOpenEvent,
   onInvitationAccepted,
+  refreshSignal,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -46,6 +57,7 @@ export default function NotificationBell({
   const [unread, setUnread] = useState(0);
   const [invites, setInvites] = useState<PendingInvite[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [tab, setTab] = useState<"notifs" | "invites">("notifs");
 
   const load = useCallback(() => {
     Promise.all([
@@ -64,11 +76,17 @@ export default function NotificationBell({
     ]).finally(() => setLoaded(true));
   }, []);
 
+  // Initial load + a slow safety refresh; the app's change poll drives the
+  // near-real-time updates via refreshSignal.
   useEffect(() => {
     load();
-    const t = setInterval(load, 30000);
+    const t = setInterval(load, 120000);
     return () => clearInterval(t);
   }, [load]);
+
+  useEffect(() => {
+    if (refreshSignal) load();
+  }, [refreshSignal, load]);
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
@@ -81,14 +99,28 @@ export default function NotificationBell({
 
   const badge = unread + invites.length;
 
+  // Just open/close — notifications stay unread until the user acts on them.
   function toggle() {
-    const next = !open;
-    setOpen(next);
-    if (next && unread > 0) {
-      fetch("/api/notifications/read", { method: "POST" }).catch(() => {});
-      setUnread(0);
-      setItems((arr) => arr.map((n) => ({ ...n, read: true })));
-    }
+    setOpen((o) => !o);
+  }
+
+  // Mark a single notification read (when its action is taken).
+  function markRead(id: string) {
+    setItems((arr) =>
+      arr.map((n) => (n.id === id && !n.read ? { ...n, read: true } : n))
+    );
+    setUnread((u) => Math.max(0, u - 1));
+    fetch("/api/notifications/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    }).catch(() => {});
+  }
+
+  function markAll() {
+    setItems((arr) => arr.map((n) => ({ ...n, read: true })));
+    setUnread(0);
+    fetch("/api/notifications/read", { method: "POST" }).catch(() => {});
   }
 
   async function accept(invite: PendingInvite) {
@@ -153,78 +185,128 @@ export default function NotificationBell({
       </button>
 
       {open && (
-        <div className="animate-rise-in absolute right-0 z-50 mt-2 max-h-[70vh] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
-          <div className="border-b border-slate-100 px-4 py-2 text-sm font-semibold dark:border-slate-800">
-            Notifications
+        <div className="animate-rise-in absolute right-0 z-50 mt-2 flex max-h-[70vh] w-80 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
+          {/* Tabs */}
+          <div className="flex items-center gap-1 border-b border-slate-100 bg-slate-100 p-1 dark:border-slate-800 dark:bg-slate-800">
+            <button
+              className={tabCls(tab === "notifs")}
+              onClick={() => setTab("notifs")}
+            >
+              Notifications
+              {unread > 0 && (
+                <span className="ml-1.5 rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white">
+                  {unread}
+                </span>
+              )}
+            </button>
+            <button
+              className={tabCls(tab === "invites")}
+              onClick={() => setTab("invites")}
+            >
+              Invites
+              {invites.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-blue-500 px-1.5 text-[10px] font-semibold text-white">
+                  {invites.length}
+                </span>
+              )}
+            </button>
           </div>
 
-          {/* Pending group invitations */}
-          {invites.map((i) => (
-            <div
-              key={i.id}
-              className="flex flex-col gap-2 border-b border-slate-100 bg-blue-50/50 px-4 py-3 text-sm dark:border-slate-800 dark:bg-blue-950/20"
-            >
-              <div>
-                You&apos;ve been invited to <strong>{i.group.name}</strong> ·{" "}
-                {i.role}
+          <div className="flex-1 overflow-y-auto">
+            {tab === "notifs" ? (
+              <>
+                {unread > 0 && (
+                  <div className="flex justify-end px-4 pt-2">
+                    <button
+                      onClick={markAll}
+                      className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Mark all read
+                    </button>
+                  </div>
+                )}
+                {!loaded && items.length === 0 ? (
+                  <div className="flex flex-col gap-3 px-4 py-3">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <Skeleton className="mt-1 h-2 w-2 rounded-full" />
+                        <div className="flex flex-1 flex-col gap-1.5">
+                          <Skeleton className="h-3.5 w-full" />
+                          <Skeleton className="h-3 w-16" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : items.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-sm text-slate-400">
+                    You&apos;re all caught up.
+                  </div>
+                ) : (
+                  items.map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() => {
+                        if (!n.read) markRead(n.id);
+                        if (n.eventId) {
+                          onOpenEvent(n.eventId);
+                          setOpen(false);
+                        }
+                      }}
+                      className={`flex w-full items-start gap-2 border-b border-slate-100 px-4 py-2.5 text-left text-sm transition hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800 ${
+                        !n.read ? "bg-blue-50/40 dark:bg-blue-950/20" : ""
+                      }`}
+                    >
+                      {!n.read ? (
+                        <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                      ) : (
+                        <span className="mt-1.5 h-2 w-2 shrink-0" />
+                      )}
+                      <span
+                        className={
+                          n.read
+                            ? "text-slate-400 dark:text-slate-500"
+                            : "font-medium text-slate-900 dark:text-slate-100"
+                        }
+                      >
+                        {n.message}
+                        <span className="ml-1 text-xs font-normal text-slate-400">
+                          · {ago(n.createdAt)}
+                        </span>
+                      </span>
+                    </button>
+                  ))
+                )}
+              </>
+            ) : invites.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-slate-400">
+                No pending invites.
               </div>
-              <div className="flex gap-2">
-                <Button size="sm" onClick={() => accept(i)}>
-                  Accept
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => decline(i)}>
-                  Decline
-                </Button>
-              </div>
-            </div>
-          ))}
-
-          {!loaded && invites.length === 0 && items.length === 0 ? (
-            <div className="flex flex-col gap-3 px-4 py-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <Skeleton className="mt-1 h-2 w-2 rounded-full" />
-                  <div className="flex flex-1 flex-col gap-1.5">
-                    <Skeleton className="h-3.5 w-full" />
-                    <Skeleton className="h-3 w-16" />
+            ) : (
+              invites.map((i) => (
+                <div
+                  key={i.id}
+                  className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 text-sm dark:border-slate-800"
+                >
+                  <div>
+                    You&apos;ve been invited to <strong>{i.group.name}</strong>{" "}
+                    · {i.role}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => accept(i)}>
+                      Accept
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => decline(i)}
+                    >
+                      Decline
+                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : items.length === 0 && invites.length === 0 ? (
-            <div className="px-4 py-6 text-center text-sm text-slate-400">
-              You&apos;re all caught up.
-            </div>
-          ) : (
-            items.map((n) => (
-              <button
-                key={n.id}
-                onClick={() => {
-                  if (n.eventId) {
-                    onOpenEvent(n.eventId);
-                    setOpen(false);
-                  }
-                }}
-                className={`flex w-full items-start gap-2 border-b border-slate-100 px-4 py-2.5 text-left text-sm transition hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800 ${
-                  n.eventId ? "cursor-pointer" : "cursor-default"
-                }`}
-              >
-                {!n.read && (
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-500" />
-                )}
-                <span
-                  className={
-                    n.read ? "pl-4 text-slate-500 dark:text-slate-400" : ""
-                  }
-                >
-                  {n.message}
-                  <span className="ml-1 text-xs text-slate-400">
-                    · {ago(n.createdAt)}
-                  </span>
-                </span>
-              </button>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>
