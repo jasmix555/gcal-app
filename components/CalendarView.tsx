@@ -35,6 +35,9 @@ export interface CalendarEvent {
   allDay: boolean;
   createdBy?: { name?: string | null; email?: string | null };
   updatedBy?: { name?: string | null; email?: string | null } | null;
+  seriesId?: string;
+  recurring?: boolean;
+  recurrence?: string | null;
 }
 
 interface Props {
@@ -178,12 +181,17 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
               };
           return {
             id: e.id,
-            title: e.title,
+            title: `${e.recurring ? "🔁 " : ""}${e.title}`,
             start: e.start,
             end: e.end,
             allDay: e.allDay,
+            // Recurring occurrences aren't drag-rescheduled (would move the series).
+            editable: e.recurring ? false : undefined,
             ...styled,
             extendedProps: {
+              seriesId: e.seriesId,
+              recurring: e.recurring,
+              recurrence: e.recurrence || null,
               groupId: e.groupId,
               description: e.description,
               location: e.location,
@@ -303,12 +311,16 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
             return;
           }
           onEventClick({
-            id: info.event.id,
+            // Open the series master for recurring occurrences.
+            id: ep.seriesId || info.event.id,
             groupId: ep.groupId,
-            title: info.event.title,
+            title: ep.recurring
+              ? info.event.title.replace(/^🔁 /, "")
+              : info.event.title,
             description: ep.description,
             location: ep.location,
             color: ep.color,
+            recurrence: ep.recurrence,
             start: info.event.startStr,
             end: info.event.endStr || info.event.startStr,
             allDay: info.event.allDay,

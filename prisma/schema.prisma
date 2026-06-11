@@ -142,6 +142,10 @@ model Event {
   start       DateTime
   end         DateTime
   allDay      Boolean  @default(false)
+  // Recurrence: null = single event. Otherwise DAILY | WEEKLY | MONTHLY | YEARLY.
+  recurrence      String?
+  recurrenceUntil DateTime? // optional last date (inclusive)
+  recurrenceCount Int? // optional max number of occurrences
   createdById String
   updatedById String?
   createdAt   DateTime @default(now())

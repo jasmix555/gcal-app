@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getMembership } from "@/lib/permissions";
 import { notify } from "@/lib/notify";
+import { expandOccurrences } from "@/lib/recurrence";
 
 export const dynamic = "force-dynamic";
 
@@ -15,16 +16,34 @@ const eventInclude = {
   attendees: { include: { user: userSelect } },
 };
 
-function serialize(e: any) {
+const FREQS = ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"];
+function normalizeFreq(v: any): string | null {
+  const s = String(v || "").toUpperCase();
+  return FREQS.includes(s) ? s : null;
+}
+
+/**
+ * Serialize an event. Pass `occ` to render a specific recurrence occurrence
+ * (its id becomes unique while `seriesId` keeps pointing at the master).
+ */
+function serialize(
+  e: any,
+  occ?: { start: number; end: number; index: number }
+) {
   return {
-    id: e.id,
+    id: occ ? `${e.id}::${occ.index}` : e.id,
+    seriesId: e.id,
+    recurring: !!e.recurrence,
+    recurrence: e.recurrence || null,
+    recurrenceUntil: e.recurrenceUntil ? e.recurrenceUntil.toISOString() : null,
+    recurrenceCount: e.recurrenceCount ?? null,
     groupId: e.groupId,
     title: e.title,
     description: e.description || "",
     location: e.location || "",
     color: e.color || null,
-    start: e.start.toISOString(),
-    end: e.end.toISOString(),
+    start: occ ? new Date(occ.start).toISOString() : e.start.toISOString(),
+    end: occ ? new Date(occ.end).toISOString() : e.end.toISOString(),
     allDay: e.allDay,
     createdBy: e.createdBy,
     updatedBy: e.updatedBy,
@@ -69,11 +88,26 @@ export async function GET(req: NextRequest) {
 
   const timeMin = searchParams.get("timeMin");
   const timeMax = searchParams.get("timeMax");
+  const tMin = timeMin
+    ? new Date(timeMin)
+    : new Date(Date.now() - 366 * 86400000);
+  const tMax = timeMax
+    ? new Date(timeMax)
+    : new Date(Date.now() + 366 * 86400000);
 
-  // Overlap filter: event starts before the window ends and ends after it starts.
-  const where: any = { groupId: { in: allowedIds } };
-  if (timeMin) where.end = { gt: new Date(timeMin) };
-  if (timeMax) where.start = { lt: new Date(timeMax) };
+  // Non-recurring events that overlap the window, OR recurring masters that
+  // start before the window ends and haven't fully ended before it.
+  const where: any = {
+    groupId: { in: allowedIds },
+    OR: [
+      { recurrence: null, end: { gt: tMin }, start: { lt: tMax } },
+      {
+        recurrence: { not: null },
+        start: { lt: tMax },
+        OR: [{ recurrenceUntil: null }, { recurrenceUntil: { gte: tMin } }],
+      },
+    ],
+  };
 
   try {
     const events = await prisma.event.findMany({
@@ -81,7 +115,25 @@ export async function GET(req: NextRequest) {
       include: eventInclude,
       orderBy: { start: "asc" },
     });
-    return NextResponse.json({ events: events.map(serialize) });
+
+    const out: any[] = [];
+    for (const e of events) {
+      if (!e.recurrence) {
+        out.push(serialize(e));
+        continue;
+      }
+      const occs = expandOccurrences(
+        e.start.getTime(),
+        e.end.getTime(),
+        e.recurrence,
+        e.recurrenceUntil ? e.recurrenceUntil.getTime() : null,
+        e.recurrenceCount ?? null,
+        tMin.getTime(),
+        tMax.getTime()
+      );
+      for (const o of occs) out.push(serialize(e, o));
+    }
+    return NextResponse.json({ events: out });
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message || "Could not load events" },
@@ -131,6 +183,13 @@ export async function POST(req: NextRequest) {
         start: new Date(body.start),
         end: new Date(body.end),
         allDay: !!body.allDay,
+        recurrence: normalizeFreq(body.recurrence),
+        recurrenceUntil: body.recurrenceUntil
+          ? new Date(body.recurrenceUntil)
+          : null,
+        recurrenceCount: body.recurrenceCount
+          ? Number(body.recurrenceCount)
+          : null,
         createdById: membership.userId,
         activities: {
           create: { userId: membership.userId, action: "created" },

@@ -18,6 +18,11 @@ const baseInclude = {
 function serialize(e: any) {
   return {
     id: e.id,
+    seriesId: e.id,
+    recurring: !!e.recurrence,
+    recurrence: e.recurrence || null,
+    recurrenceUntil: e.recurrenceUntil ? e.recurrenceUntil.toISOString() : null,
+    recurrenceCount: e.recurrenceCount ?? null,
     groupId: e.groupId,
     title: e.title,
     description: e.description || "",
@@ -100,6 +105,20 @@ export async function PATCH(
   if (body.start !== undefined) data.start = new Date(body.start);
   if (body.end !== undefined) data.end = new Date(body.end);
   if (body.allDay !== undefined) data.allDay = !!body.allDay;
+  if (body.recurrence !== undefined) {
+    const s = String(body.recurrence || "").toUpperCase();
+    data.recurrence = ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"].includes(s)
+      ? s
+      : null;
+  }
+  if (body.recurrenceUntil !== undefined)
+    data.recurrenceUntil = body.recurrenceUntil
+      ? new Date(body.recurrenceUntil)
+      : null;
+  if (body.recurrenceCount !== undefined)
+    data.recurrenceCount = body.recurrenceCount
+      ? Number(body.recurrenceCount)
+      : null;
 
   // Move the event to a different calendar (group) the user belongs to.
   if (body.groupId && body.groupId !== existing.groupId) {

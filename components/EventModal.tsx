@@ -27,6 +27,12 @@ export interface EditableEvent {
   start: string;
   end: string;
   allDay?: boolean;
+  // Recurrence: "" / null = single. Else DAILY|WEEKLY|MONTHLY|YEARLY.
+  recurrence?: string | null;
+  recurrenceUntil?: string | null; // "YYYY-MM-DD" in the form
+  recurrenceCount?: number | null;
+  seriesId?: string;
+  recurring?: boolean;
   attendees?: string[]; // emails (sent on save)
   /** Pre-seed the guest list (e.g. from Find a time) for a brand-new event. */
   prefillAttendees?: {
@@ -217,9 +223,33 @@ export default function EventModal({
       fetch(`/api/events/${event.id}`)
         .then((r) => r.json())
         .then((d) => {
-          setActivities(d.event?.activities || []);
-          setAttendees(d.event?.attendees || []);
-          if (d.event?.groupId) setTargetGroupId(d.event.groupId);
+          const ev = d.event;
+          if (!ev) return;
+          setActivities(ev.activities || []);
+          setAttendees(ev.attendees || []);
+          if (ev.groupId) setTargetGroupId(ev.groupId);
+          setForm((f) => {
+            const next: EditableEvent = {
+              ...f,
+              recurrence: ev.recurrence || "",
+              recurrenceUntil: ev.recurrenceUntil
+                ? ev.recurrenceUntil.slice(0, 10)
+                : "",
+            };
+            // For a series, show the master's canonical times (not the
+            // clicked occurrence's) so edits apply to the whole series.
+            if (ev.recurring) {
+              next.start = toLocalInput(ev.start, ev.allDay);
+              let endVal = toLocalInput(ev.end, ev.allDay);
+              if (ev.allDay) {
+                const inc = shiftDate(endVal, -1);
+                endVal = inc < ev.start.slice(0, 10) ? endVal : inc;
+              }
+              next.end = endVal;
+              next.allDay = ev.allDay;
+            }
+            return next;
+          });
         })
         .catch(() => {});
     } else {
@@ -431,6 +461,16 @@ export default function EventModal({
 
               <div className="mt-3 flex flex-col gap-2 pl-[26px] text-sm text-slate-600 dark:text-slate-300">
                 <div>{formatRange(form.start, form.end, form.allDay)}</div>
+                {form.recurrence && (
+                  <div className="text-xs text-slate-400">
+                    🔁 Repeats {form.recurrence.toLowerCase()}
+                    {form.recurrenceUntil
+                      ? ` until ${new Date(
+                          form.recurrenceUntil
+                        ).toLocaleDateString()}`
+                      : ""}
+                  </div>
+                )}
                 {form.location && <div>📍 {form.location}</div>}
                 {form.description && (
                   <div className="whitespace-pre-wrap">{form.description}</div>
@@ -615,6 +655,66 @@ export default function EventModal({
                 />
                 All day
               </label>
+
+              {/* Repeat */}
+              <div>
+                <label className={label}>Repeat</label>
+                <select
+                  className={`${input} select-chevron`}
+                  value={form.recurrence || ""}
+                  onChange={(e) => update("recurrence", e.target.value || null)}
+                >
+                  <option value="">Does not repeat</option>
+                  <option value="DAILY">Daily</option>
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="MONTHLY">Monthly</option>
+                  <option value="YEARLY">Yearly</option>
+                </select>
+                {form.recurrence && (
+                  <div className="mt-2">
+                    <label className={label}>Ends</label>
+                    {form.recurrenceUntil ? (
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <DateTimeField
+                            value={form.recurrenceUntil}
+                            allDay
+                            onChange={(v) => update("recurrenceUntil", v)}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => update("recurrenceUntil", "")}
+                          title="Remove end date"
+                          className="rounded-lg border border-slate-200 px-2.5 py-2 text-sm text-slate-500 transition hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date();
+                          d.setMonth(d.getMonth() + 1);
+                          update(
+                            "recurrenceUntil",
+                            `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(
+                              d.getDate()
+                            )}`
+                          );
+                        }}
+                        className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500 transition hover:border-slate-400 hover:text-slate-700 dark:border-slate-600 dark:hover:text-slate-300"
+                      >
+                        ⏳ Add end date
+                      </button>
+                    )}
+                    <p className="mt-1 text-xs text-slate-400">
+                      Leave empty to repeat indefinitely.
+                    </p>
+                  </div>
+                )}
+              </div>
 
               {/* Guests / attendees */}
               <div>
