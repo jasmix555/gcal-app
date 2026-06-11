@@ -103,6 +103,10 @@ export default function Sidebar({
     name: string;
     color?: string | null;
   } | null>(null);
+  const [customColor, setCustomColor] = useState("#2563eb");
+  useEffect(() => {
+    if (colorFor) setCustomColor(colorFor.color || "#2563eb");
+  }, [colorFor]);
 
   // Local drag-reorder order (ids); synced from props, reordered live on drag.
   const [order, setOrder] = useState<string[]>([]);
@@ -654,6 +658,29 @@ export default function Sidebar({
               );
             })}
           </div>
+
+          {/* Custom color wheel */}
+          <div className="mt-2 flex items-center gap-3 border-t border-slate-200 pt-3 dark:border-slate-800">
+            <input
+              type="color"
+              value={customColor}
+              onChange={(e) => setCustomColor(e.target.value)}
+              aria-label="Custom color"
+              className="h-9 w-12 cursor-pointer rounded border border-slate-200 bg-transparent p-0.5 dark:border-slate-700"
+            />
+            <span className="font-mono text-sm text-slate-500 dark:text-slate-400">
+              {customColor.toUpperCase()}
+            </span>
+            <Button
+              className="ml-auto"
+              onClick={() =>
+                colorFor && setCalendarColor(colorFor.id, customColor)
+              }
+            >
+              Use color
+            </Button>
+          </div>
+
           <DialogFooter>
             <Button
               variant="outline"
