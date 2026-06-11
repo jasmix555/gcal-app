@@ -332,7 +332,7 @@ export default function EventModal({
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0"
+        className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 max-sm:!left-0 max-sm:!top-0 max-sm:!h-[100dvh] max-sm:!max-h-[100dvh] max-sm:!w-full max-sm:!max-w-none max-sm:!translate-x-0 max-sm:!translate-y-0 max-sm:!rounded-none max-sm:!border-0"
         onInteractOutside={(e) => {
           const t = (e.detail as any)?.originalEvent?.target as
             | HTMLElement
@@ -690,11 +690,11 @@ export default function EventModal({
               </div>
             </div>
 
-            <DialogFooter className="border-t border-slate-200 px-6 py-4 dark:border-slate-800 sm:justify-between">
+            <DialogFooter className="flex-row items-center justify-between gap-2 border-t border-slate-200 px-6 py-4 dark:border-slate-800 max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))] sm:justify-between">
               {isEdit && canDelete && onDelete ? (
                 <Button
                   variant="destructive"
-                  className="border border-red-700 sm:mr-auto"
+                  className="border border-red-700"
                   onClick={() => setConfirmDelete(true)}
                   disabled={saving}
                 >

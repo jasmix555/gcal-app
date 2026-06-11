@@ -10,6 +10,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Let content extend into the safe areas so we can pad against the iOS
+  // Safari bottom toolbar / home indicator ourselves.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

@@ -283,7 +283,7 @@ export default function Home() {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
+    <div className="flex h-[100dvh] overflow-hidden bg-slate-50 dark:bg-slate-950">
       {/* Desktop: sidebar pushes content. Mobile: slide-in drawer over content. */}
       {!isMobile && sidebarOpen && sidebarEl}
       {isMobile && sidebarOpen && (
@@ -372,6 +372,26 @@ export default function Home() {
                 onMemoClick={(id) => {
                   setFocusMemo(id);
                   setNotesOpen(true);
+                }}
+                onDateClick={({ dateStr, allDay }) => {
+                  if (allDay || dateStr.length <= 10) {
+                    const d = dateStr.slice(0, 10);
+                    setModalEvent({
+                      title: "",
+                      start: d,
+                      end: d,
+                      allDay: true,
+                    });
+                  } else {
+                    const s = new Date(dateStr);
+                    setModalEvent({
+                      title: "",
+                      start: s.toISOString(),
+                      end: new Date(s.getTime() + 3600000).toISOString(),
+                      allDay: false,
+                    });
+                  }
+                  setCanDelete(false);
                 }}
               />
             )}

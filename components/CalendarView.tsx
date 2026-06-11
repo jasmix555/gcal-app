@@ -50,10 +50,18 @@ interface Props {
     allDay: boolean;
   }) => void;
   onMemoClick?: (memoId: string) => void;
+  onDateClick?: (info: { dateStr: string; allDay: boolean }) => void;
 }
 
 const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
-  { groupIds, onEventClick, onSelectRange, onReschedule, onMemoClick },
+  {
+    groupIds,
+    onEventClick,
+    onSelectRange,
+    onReschedule,
+    onMemoClick,
+    onDateClick,
+  },
   ref
 ) {
   const calRef = useRef<FullCalendar>(null);
@@ -78,13 +86,6 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
     return () => mq.removeEventListener("change", apply);
   }, []);
 
-  // Single-day view on phones, month view on larger screens.
-  useEffect(() => {
-    calRef.current
-      ?.getApi()
-      .changeView(isMobile ? "timeGridDay" : "dayGridMonth");
-  }, [isMobile]);
-
   useEffect(() => {
     groupIdsRef.current = groupIds;
     calRef.current?.getApi().refetchEvents();
@@ -94,6 +95,12 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
   useImperativeHandle(ref, () => ({
     refetch: () => calRef.current?.getApi().refetchEvents(),
   }));
+
+  // Always start on the month view (incl. phones); leaves later manual
+  // view changes untouched since this only runs once on mount.
+  useEffect(() => {
+    calRef.current?.getApi().changeView("dayGridMonth");
+  }, []);
 
   // Stable reference so re-renders don't make FullCalendar refetch everything.
   const fetchEvents = useCallback(
@@ -220,7 +227,7 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
           setLoading(isLoading);
           if (!isLoading) loadedOnce.current = true;
         }}
-        initialView={isMobile ? "timeGridDay" : "dayGridMonth"}
+        initialView="dayGridMonth"
         headerToolbar={
           isMobile
             ? {
@@ -268,6 +275,11 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
             end: info.endStr,
             allDay: info.allDay,
           });
+        }}
+        // A plain tap fires dateClick (select needs a drag / long-press on
+        // touch), so this is what makes "tap a day to create" work on phones.
+        dateClick={(info) => {
+          onDateClick?.({ dateStr: info.dateStr, allDay: info.allDay });
         }}
         eventDrop={(info) => {
           onReschedule({
