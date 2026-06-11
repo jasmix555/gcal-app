@@ -529,6 +529,8 @@ export default function EventModal({
                     value={form.start}
                     allDay={form.allDay}
                     onChange={(v) => update("start", v)}
+                    rangeStart={form.start}
+                    rangeEnd={form.end}
                   />
                 </div>
                 <div className="flex-1">
@@ -537,6 +539,8 @@ export default function EventModal({
                     value={form.end}
                     allDay={form.allDay}
                     onChange={(v) => update("end", v)}
+                    rangeStart={form.start}
+                    rangeEnd={form.end}
                   />
                 </div>
               </div>

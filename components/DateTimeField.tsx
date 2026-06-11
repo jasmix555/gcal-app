@@ -7,6 +7,18 @@ interface Props {
   value: string; // "YYYY-MM-DDTHH:mm" (timed) or "YYYY-MM-DD" (all day)
   allDay?: boolean;
   onChange: (v: string) => void;
+  // When provided, the calendar paints a Trip.com-style band between the
+  // start and end dates with solid endpoints (pass to both start & end fields).
+  rangeStart?: string;
+  rangeEnd?: string;
+}
+
+/** Parse a value to a date-only timestamp (midnight local), or null. */
+function dateOnly(value?: string): number | null {
+  if (!value) return null;
+  const [y, m, d] = value.split("T")[0].split("-").map(Number);
+  if (!y) return null;
+  return new Date(y, (m || 1) - 1, d || 1).getTime();
 }
 
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -50,7 +62,13 @@ function toValue(date: Date, allDay?: boolean): string {
 const trigger =
   "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-900 outline-none transition hover:border-slate-300 focus:border-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-600";
 
-export default function DateTimeField({ value, allDay, onChange }: Props) {
+export default function DateTimeField({
+  value,
+  allDay,
+  onChange,
+  rangeStart,
+  rangeEnd,
+}: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -108,6 +126,11 @@ export default function DateTimeField({ value, allDay, onChange }: Props) {
     ...Array(firstWeekday).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
+
+  // Range band (start → end). Only when both ends exist and span > 0.
+  const rStart = dateOnly(rangeStart);
+  const rEnd = dateOnly(rangeEnd);
+  const hasRange = rStart !== null && rEnd !== null && rEnd > rStart;
 
   function pickDay(day: number) {
     const next = new Date(selected);
@@ -171,7 +194,7 @@ export default function DateTimeField({ value, allDay, onChange }: Props) {
                 </button>
               </div>
 
-              <div className="grid grid-cols-7 gap-0.5 text-center text-[11px] text-slate-400">
+              <div className="grid grid-cols-7 text-center text-[11px] text-slate-400">
                 {WEEKDAYS.map((d) => (
                   <div key={d} className="py-1">
                     {d}
@@ -179,9 +202,10 @@ export default function DateTimeField({ value, allDay, onChange }: Props) {
                 ))}
               </div>
 
-              <div className="grid grid-cols-7 gap-0.5">
+              <div className="grid grid-cols-7 gap-y-0.5">
                 {cells.map((day, i) => {
                   if (day === null) return <div key={i} />;
+                  const t = new Date(year, month, day).getTime();
                   const isSelected =
                     selected.getFullYear() === year &&
                     selected.getMonth() === month &&
@@ -190,21 +214,44 @@ export default function DateTimeField({ value, allDay, onChange }: Props) {
                     today.getFullYear() === year &&
                     today.getMonth() === month &&
                     today.getDate() === day;
+
+                  // Range band membership.
+                  const isStart = hasRange && t === rStart;
+                  const isEnd = hasRange && t === rEnd;
+                  const between = hasRange && t > rStart! && t < rEnd!;
+                  const inBand = isStart || isEnd || between;
+                  const endpoint = hasRange ? isStart || isEnd : isSelected;
+
+                  // Connecting band background (square-tiled; rounded at ends).
+                  let band = "";
+                  if (inBand) {
+                    band =
+                      "bg-blue-100 dark:bg-blue-900/40" +
+                      (isStart ? " rounded-l-full" : "") +
+                      (isEnd ? " rounded-r-full" : "");
+                  }
+
                   return (
-                    <button
+                    <div
                       key={i}
-                      type="button"
-                      onClick={() => pickDay(day)}
-                      className={`flex h-8 w-8 items-center justify-center rounded-full text-sm transition ${
-                        isSelected
-                          ? "bg-blue-600 text-white"
-                          : isToday
-                            ? "font-semibold text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-700"
-                            : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
-                      }`}
+                      className={`flex h-9 items-center justify-center ${band}`}
                     >
-                      {day}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => pickDay(day)}
+                        className={`flex h-8 w-8 items-center justify-center rounded-full text-sm transition ${
+                          endpoint
+                            ? "bg-blue-600 font-semibold text-white"
+                            : between
+                              ? "text-blue-700 dark:text-blue-200"
+                              : isToday
+                                ? "font-semibold text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700"
+                        }`}
+                      >
+                        {day}
+                      </button>
+                    </div>
                   );
                 })}
               </div>
