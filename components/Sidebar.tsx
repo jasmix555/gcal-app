@@ -277,8 +277,6 @@ export default function Sidebar({
     <aside className="animate-fade-in flex h-full w-[300px] max-w-[85vw] shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
       <h1 className="text-lg font-semibold">📅 Team Calendar</h1>
 
-      {user && <ProfileMenu user={user} onResetDone={onGroupsChanged} />}
-
       <button
         className={`${btnPrimary} w-full shadow-sm hover:-translate-y-px hover:shadow-md active:translate-y-0`}
         onClick={onNewEvent}
@@ -502,6 +500,12 @@ export default function Sidebar({
           })}
         </div>
       </div>
+
+      {user && (
+        <div className="mt-auto border-t border-slate-100 pt-3 dark:border-slate-800">
+          <ProfileMenu user={user} onResetDone={onGroupsChanged} dropUp />
+        </div>
+      )}
 
       {manage && (
         <InviteModal
