@@ -74,6 +74,9 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
   const groupColorsRef = useRef<Record<string, string | null>>(
     groupColors || {}
   );
+  // Cache fetched ranges so revisiting a month is instant. Cleared only when
+  // data actually changes (create/edit/delete or the real-time poll).
+  const cacheRef = useRef<Map<string, any[]>>(new Map());
   const groupKey = groupIds.join(",");
   const colorKey = JSON.stringify(groupColors || {});
   const [loading, setLoading] = useState(false);
@@ -97,19 +100,25 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
 
   useEffect(() => {
     groupIdsRef.current = groupIds;
+    cacheRef.current.clear(); // visible calendars changed → different data
     calRef.current?.getApi().refetchEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupKey]);
 
-  // Recolor events when a calendar's color changes.
+  // Recolor events when a calendar's color changes (cached items are pre-colored).
   useEffect(() => {
     groupColorsRef.current = groupColors || {};
+    cacheRef.current.clear();
     calRef.current?.getApi().refetchEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [colorKey]);
 
   useImperativeHandle(ref, () => ({
-    refetch: () => calRef.current?.getApi().refetchEvents(),
+    // A real change happened → drop the cache so every range revalidates.
+    refetch: () => {
+      cacheRef.current.clear();
+      calRef.current?.getApi().refetchEvents();
+    },
     today: () => calRef.current?.getApi().today(),
     view: (name: string) => calRef.current?.getApi().changeView(name),
   }));
@@ -126,6 +135,13 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
       const ids = groupIdsRef.current;
       if (!ids || ids.length === 0) {
         success([]);
+        return;
+      }
+      // Serve already-loaded ranges instantly from cache (no network, no loader).
+      const cacheKey = `${ids.join(",")}|${info.startStr}|${info.endStr}`;
+      const cached = cacheRef.current.get(cacheKey);
+      if (cached) {
+        success(cached);
         return;
       }
       try {
@@ -204,7 +220,14 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
             });
         }
 
-        success([...eventItems, ...memoItems]);
+        const items = [...eventItems, ...memoItems];
+        cacheRef.current.set(cacheKey, items);
+        // Keep the cache bounded (most-recent ~24 ranges).
+        if (cacheRef.current.size > 24) {
+          const oldest = cacheRef.current.keys().next().value;
+          if (oldest !== undefined) cacheRef.current.delete(oldest);
+        }
+        success(items);
       } catch (err) {
         failure(err);
       }
