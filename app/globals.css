@@ -221,8 +221,21 @@ body {
   }
 }
 
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 .animate-slide-in-left {
   animation: slideInLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .animate-fade-in {
@@ -242,6 +255,7 @@ body {
   .animate-scale-in,
   .animate-rise-in,
   .animate-slide-in-left,
+  .animate-slide-in-right,
   .fc .fc-event {
     animation: none !important;
     transition: none !important;
@@ -289,6 +303,84 @@ body {
 
 .dark .fc-theme-standard .fc-list-day-cushion {
   background: #1e293b;
+}
+
+/* ===========================================================================
+   Rich-text editor (memos) — content styling for the contentEditable area
+   and anywhere memo HTML is rendered (.rte-content).
+   ======================================================================== */
+.rte-content:empty::before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.rte-content h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0.4em 0 0.2em;
+}
+.rte-content h2 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0.4em 0 0.2em;
+}
+.rte-content h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0.4em 0 0.2em;
+}
+.rte-content p {
+  margin: 0.25em 0;
+}
+.rte-content ul,
+.rte-content ol {
+  margin: 0.25em 0;
+  padding-left: 1.4em;
+}
+.rte-content ul {
+  list-style: disc;
+}
+.rte-content ol {
+  list-style: decimal;
+}
+.rte-content blockquote {
+  border-left: 3px solid #cbd5e1;
+  margin: 0.4em 0;
+  padding-left: 0.8em;
+  color: #64748b;
+}
+.dark .rte-content blockquote {
+  border-left-color: #475569;
+  color: #94a3b8;
+}
+.rte-content a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+/* Checklists: no bullets, inline checkbox + label. */
+.rte-content ul.todo-list {
+  list-style: none;
+  padding-left: 0.2em;
+}
+.rte-content ul.todo-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+  margin: 0.15em 0;
+}
+.rte-content ul.todo-list input[type="checkbox"] {
+  margin-top: 0.2em;
+  width: 1em;
+  height: 1em;
+  accent-color: #2563eb;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.rte-content ul.todo-list input[type="checkbox"]:checked + span {
+  text-decoration: line-through;
+  color: #94a3b8;
 }
 
 /* Compact the FullCalendar toolbar on phones so it never overflows. */

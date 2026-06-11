@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Notification {
   id: string;
@@ -44,20 +45,23 @@ export default function NotificationBell({
   const [items, setItems] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const [invites, setInvites] = useState<PendingInvite[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(() => {
-    fetch("/api/notifications")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!d) return;
-        setItems(d.notifications || []);
-        setUnread(d.unread || 0);
-      })
-      .catch(() => {});
-    fetch("/api/invitations")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setInvites(d.invitations || []))
-      .catch(() => {});
+    Promise.all([
+      fetch("/api/notifications")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!d) return;
+          setItems(d.notifications || []);
+          setUnread(d.unread || 0);
+        })
+        .catch(() => {}),
+      fetch("/api/invitations")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => d && setInvites(d.invitations || []))
+        .catch(() => {}),
+    ]).finally(() => setLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -175,7 +179,19 @@ export default function NotificationBell({
             </div>
           ))}
 
-          {items.length === 0 && invites.length === 0 ? (
+          {!loaded && invites.length === 0 && items.length === 0 ? (
+            <div className="flex flex-col gap-3 px-4 py-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <Skeleton className="mt-1 h-2 w-2 rounded-full" />
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <Skeleton className="h-3.5 w-full" />
+                    <Skeleton className="h-3 w-16" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : items.length === 0 && invites.length === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-slate-400">
               You&apos;re all caught up.
             </div>

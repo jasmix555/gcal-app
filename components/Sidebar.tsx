@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { colorForKey } from "@/lib/colors";
 import InviteModal from "@/components/InviteModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,7 @@ interface GroupSummary {
 interface Props {
   user?: { name?: string | null; email?: string | null; image?: string | null };
   groups: GroupSummary[];
+  groupsLoading?: boolean;
   visibleIds: string[];
   onToggleVisible: (id: string) => void;
   onGroupsChanged: () => void;
@@ -49,6 +51,7 @@ function initials(name?: string | null, email?: string | null) {
 export default function Sidebar({
   user,
   groups,
+  groupsLoading,
   visibleIds,
   onToggleVisible,
   onGroupsChanged,
@@ -219,6 +222,17 @@ export default function Sidebar({
           </button>
         </div>
         <div className="flex flex-col gap-0.5">
+          {groupsLoading &&
+            groups.length === 0 &&
+            Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={`gs${i}`}
+                className="flex items-center gap-2 px-1.5 py-1.5"
+              >
+                <Skeleton className="h-4 w-4 rounded" />
+                <Skeleton className="h-3.5 w-32" />
+              </div>
+            ))}
           {groups.map((g) => {
             const visible = visibleIds.includes(g.id);
             const color = colorForKey(g.id);

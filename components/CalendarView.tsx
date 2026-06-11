@@ -49,10 +49,11 @@ interface Props {
     end: string;
     allDay: boolean;
   }) => void;
+  onMemoClick?: (memoId: string) => void;
 }
 
 const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
-  { groupIds, onEventClick, onSelectRange, onReschedule },
+  { groupIds, onEventClick, onSelectRange, onReschedule, onMemoClick },
   ref
 ) {
   const calRef = useRef<FullCalendar>(null);
@@ -103,37 +104,66 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
         return;
       }
       try {
-        const res = await fetch(
-          `/api/events?groupIds=${encodeURIComponent(ids.join(","))}&timeMin=${encodeURIComponent(
-            info.startStr
-          )}&timeMax=${encodeURIComponent(info.endStr)}`
-        );
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to load events");
-        success(
-          data.events.map((e: CalendarEvent) => {
-            // Always color an event by its calendar (matches the sidebar checkbox).
-            const color = colorForKey(e.groupId);
-            return {
-              id: e.id,
-              title: e.title,
-              start: e.start,
-              end: e.end,
-              allDay: e.allDay,
-              backgroundColor: color,
-              borderColor: color,
-              textColor: readableText(color),
-              extendedProps: {
-                groupId: e.groupId,
-                description: e.description,
-                location: e.location,
-                color: e.color || null,
-                createdBy: e.createdBy,
-                updatedBy: e.updatedBy,
-              },
-            };
-          })
-        );
+        const range = `timeMin=${encodeURIComponent(
+          info.startStr
+        )}&timeMax=${encodeURIComponent(info.endStr)}`;
+        // Events for the visible calendars + this user's memo reminders in range.
+        const [eventsRes, memosRes] = await Promise.all([
+          fetch(
+            `/api/events?groupIds=${encodeURIComponent(ids.join(","))}&${range}`
+          ),
+          fetch(`/api/memos?${range}`),
+        ]);
+        const data = await eventsRes.json();
+        if (!eventsRes.ok)
+          throw new Error(data.error || "Failed to load events");
+
+        const eventItems = data.events.map((e: CalendarEvent) => {
+          // Always color an event by its calendar (matches the sidebar checkbox).
+          const color = colorForKey(e.groupId);
+          return {
+            id: e.id,
+            title: e.title,
+            start: e.start,
+            end: e.end,
+            allDay: e.allDay,
+            backgroundColor: color,
+            borderColor: color,
+            textColor: readableText(color),
+            extendedProps: {
+              groupId: e.groupId,
+              description: e.description,
+              location: e.location,
+              color: e.color || null,
+              createdBy: e.createdBy,
+              updatedBy: e.updatedBy,
+            },
+          };
+        });
+
+        // Memo reminders: pinned, not draggable, prefixed so they read as notes.
+        let memoItems: any[] = [];
+        if (memosRes.ok) {
+          const md = await memosRes.json();
+          memoItems = (md.memos || [])
+            .filter((m: any) => m.remindAt)
+            .map((m: any) => {
+              const color = m.groupId ? colorForKey(m.groupId) : "#f59e0b";
+              return {
+                id: `memo-${m.id}`,
+                title: `📝 ${m.title}`,
+                start: m.remindAt,
+                allDay: false,
+                editable: false,
+                backgroundColor: color,
+                borderColor: color,
+                textColor: readableText(color),
+                extendedProps: { memoId: m.id },
+              };
+            });
+        }
+
+        success([...eventItems, ...memoItems]);
       } catch (err) {
         failure(err);
       }
@@ -200,6 +230,10 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
         events={fetchEvents}
         eventClick={(info) => {
           const ep = info.event.extendedProps as any;
+          if (ep.memoId) {
+            onMemoClick?.(ep.memoId);
+            return;
+          }
           onEventClick({
             id: info.event.id,
             groupId: ep.groupId,

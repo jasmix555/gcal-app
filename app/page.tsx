@@ -10,6 +10,7 @@ import Sidebar from "@/components/Sidebar";
 import EventModal, { EditableEvent } from "@/components/EventModal";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell from "@/components/NotificationBell";
+import NotesPanel from "@/components/NotesPanel";
 import { toast } from "sonner";
 
 interface GroupSummary {
@@ -32,12 +33,15 @@ export default function Home() {
 
   const [mounted, setMounted] = useState(false);
   const [groups, setGroups] = useState<GroupSummary[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(true);
   const [visibleIds, setVisibleIds] = useState<string[]>([]);
   const [modalEvent, setModalEvent] = useState<EditableEvent | null>(null);
   const [canDelete, setCanDelete] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [focusMemo, setFocusMemo] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -60,8 +64,9 @@ export default function Home() {
   }
 
   const loadGroups = useCallback(async () => {
-    const res = await fetch("/api/groups");
-    if (!res.ok) return;
+    const res = await fetch("/api/groups").catch(() => null);
+    setGroupsLoading(false);
+    if (!res || !res.ok) return;
     const d = await res.json();
     const gs: GroupSummary[] = d.groups || [];
     setGroups(gs);
@@ -255,6 +260,7 @@ export default function Home() {
     <Sidebar
       user={session?.user}
       groups={groups}
+      groupsLoading={groupsLoading}
       visibleIds={visibleIds}
       onToggleVisible={toggleVisible}
       onGroupsChanged={loadGroups}
@@ -304,6 +310,32 @@ export default function Home() {
             </svg>
           </button>
           <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => {
+                setFocusMemo(null);
+                setNotesOpen(true);
+              }}
+              aria-label="Notes"
+              title="Notes"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <path d="M14 2v6h6" />
+                <line x1="8" y1="13" x2="16" y2="13" />
+                <line x1="8" y1="17" x2="13" y2="17" />
+              </svg>
+              <span className="hidden sm:inline">Notes</span>
+            </button>
             <NotificationBell
               onOpenEvent={openEventById}
               onInvitationAccepted={(groupId) => {
@@ -326,6 +358,10 @@ export default function Home() {
                 onEventClick={openExisting}
                 onSelectRange={handleSelectRange}
                 onReschedule={handleReschedule}
+                onMemoClick={(id) => {
+                  setFocusMemo(id);
+                  setNotesOpen(true);
+                }}
               />
             )}
           </div>
@@ -344,6 +380,18 @@ export default function Home() {
           onClose={() => setModalEvent(null)}
         />
       )}
+
+      <NotesPanel
+        open={notesOpen}
+        onClose={() => {
+          setNotesOpen(false);
+          setFocusMemo(null);
+        }}
+        groups={groups}
+        defaultGroupId={defaultGroupId}
+        focusMemoId={focusMemo}
+        onChanged={() => calRef.current?.refetch()}
+      />
     </div>
   );
 }

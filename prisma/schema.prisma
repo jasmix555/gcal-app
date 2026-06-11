@@ -34,6 +34,7 @@ model User {
   attendances        EventAttendee[]
   notifications      Notification[]  @relation("UserNotifications")
   actedNotifications Notification[]  @relation("ActorNotifications")
+  memos              Memo[]          @relation("MemoCreator")
 }
 
 model Account {
@@ -85,6 +86,7 @@ model Group {
   memberships Membership[]
   events      Event[]
   invitations Invitation[]
+  memos       Memo[]
 }
 
 enum Role {
@@ -219,4 +221,27 @@ model Notification {
   event Event? @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([userId, read])
+}
+
+// ---------------------------------------------------------------------------
+// Memos / reminders: personal rich-text notes and to-do lists, optionally
+// linked to a calendar and optionally pinned to a date as a reminder.
+// ---------------------------------------------------------------------------
+
+model Memo {
+  id          String    @id @default(cuid())
+  title       String
+  content     String    @db.Text // rich-text HTML (notes + checklists)
+  groupId     String? // optional linked calendar (null = unlinked)
+  remindAt    DateTime? // optional reminder date shown on the calendar
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  createdBy User   @relation("MemoCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  group     Group? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  @@index([createdById])
+  @@index([groupId])
+  @@index([remindAt])
 }
