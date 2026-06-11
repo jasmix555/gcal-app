@@ -20,10 +20,21 @@ const providers: NextAuthOptions["providers"] = [
       });
       if (!user || !user.passwordHash) return null;
 
-      const valid = await bcrypt.compare(credentials.password, user.passwordHash);
+      const valid = await bcrypt.compare(
+        credentials.password,
+        user.passwordHash
+      );
       if (!valid) return null;
 
-      return { id: user.id, name: user.name, email: user.email, image: user.image };
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        // Keep big data-URL avatars out of the JWT/cookie; the app fetches the
+        // avatar from /api/profile instead. Normal URL avatars are fine.
+        image:
+          user.image && !user.image.startsWith("data:") ? user.image : null,
+      };
     },
   }),
 ];
@@ -48,8 +59,13 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) token.id = user.id;
+      // Reflect profile edits (name/photo) made via useSession().update().
+      if (trigger === "update" && session) {
+        if (session.name !== undefined) token.name = session.name;
+        if (session.image !== undefined) token.picture = session.image;
+      }
       return token;
     },
     async session({ session, token }) {

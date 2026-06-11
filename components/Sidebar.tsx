@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { colorForKey } from "@/lib/colors";
 import InviteModal from "@/components/InviteModal";
+import ProfileMenu from "@/components/ProfileMenu";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -34,8 +35,6 @@ interface Props {
   onNewEvent: () => void;
 }
 
-const btn =
-  "rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700";
 const btnPrimary =
   "rounded-lg border border-accent bg-accent px-3 py-2 text-sm text-white transition hover:bg-accent-dark disabled:opacity-50";
 const input =
@@ -43,10 +42,6 @@ const input =
 const label = "mb-1 text-xs font-medium uppercase tracking-wide text-slate-400";
 const menuItem =
   "block w-full px-3 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700";
-
-function initials(name?: string | null, email?: string | null) {
-  return (name || email || "?").slice(0, 2).toUpperCase();
-}
 
 export default function Sidebar({
   user,
@@ -62,6 +57,10 @@ export default function Sidebar({
 
   const [newGroup, setNewGroup] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [addMenu, setAddMenu] = useState(false);
+  const [showJoin, setShowJoin] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+  const [joining, setJoining] = useState(false);
   const [menuId, setMenuId] = useState<string | null>(null);
   const [manage, setManage] = useState<{
     id: string;
@@ -101,6 +100,31 @@ export default function Sidebar({
       if (d.group?.id) onToggleVisible(d.group.id);
     } catch (err: any) {
       toast.error(err.message || "Could not create group");
+    }
+  }
+
+  async function joinByCode(e: React.FormEvent) {
+    e.preventDefault();
+    const code = joinCode.trim();
+    if (!code) return;
+    setJoining(true);
+    try {
+      const res = await fetch("/api/groups/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Could not join with that code");
+      setJoinCode("");
+      setShowJoin(false);
+      toast.success(`Joined “${d.groupName}”`);
+      onGroupsChanged();
+      if (d.groupId) onToggleVisible(d.groupId);
+    } catch (err: any) {
+      toast.error(err.message || "Could not join");
+    } finally {
+      setJoining(false);
     }
   }
 
@@ -169,22 +193,7 @@ export default function Sidebar({
     <aside className="animate-fade-in flex h-full w-[300px] max-w-[85vw] shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
       <h1 className="text-lg font-semibold">📅 Team Calendar</h1>
 
-      {user && (
-        <div className="flex items-center gap-2.5 text-sm">
-          {user.image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={user.image} alt="" className="h-8 w-8 rounded-full" />
-          ) : (
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-blue-900">
-              {initials(user.name, user.email)}
-            </span>
-          )}
-          <div className="min-w-0">
-            <div className="truncate">{user.name || user.email}</div>
-            <div className="truncate text-xs text-slate-400">{user.email}</div>
-          </div>
-        </div>
-      )}
+      {user && <ProfileMenu user={user} onResetDone={onGroupsChanged} />}
 
       <button
         className={`${btnPrimary} w-full shadow-sm hover:-translate-y-px hover:shadow-md active:translate-y-0`}
@@ -197,29 +206,58 @@ export default function Sidebar({
       <div>
         <div className="mb-1 flex items-center justify-between">
           <p className={`${label} mb-0`}>My calendars</p>
-          <button
-            onClick={() => {
-              setNewGroup("");
-              setShowCreate(true);
-            }}
-            aria-label="New calendar"
-            title="New calendar"
-            className="flex h-6 w-6 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          <div className="relative">
+            <button
+              onClick={() => setAddMenu((o) => !o)}
+              aria-label="Add calendar"
+              title="Add calendar"
+              className="flex h-6 w-6 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800"
             >
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-          </button>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+            {addMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setAddMenu(false)}
+                />
+                <div className="absolute right-0 z-50 mt-1 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                  <button
+                    className={menuItem}
+                    onClick={() => {
+                      setAddMenu(false);
+                      setNewGroup("");
+                      setShowCreate(true);
+                    }}
+                  >
+                    ➕ Create calendar
+                  </button>
+                  <button
+                    className={menuItem}
+                    onClick={() => {
+                      setAddMenu(false);
+                      setJoinCode("");
+                      setShowJoin(true);
+                    }}
+                  >
+                    🔗 Join with code
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
         <div className="flex flex-col gap-0.5">
           {groupsLoading &&
@@ -351,15 +389,6 @@ export default function Sidebar({
         </div>
       </div>
 
-      <div className="mt-auto">
-        <button
-          className={`${btn} w-full`}
-          onClick={() => signOut({ callbackUrl: "/login" })}
-        >
-          Sign out
-        </button>
-      </div>
-
       {manage && (
         <InviteModal
           groupId={manage.id}
@@ -398,6 +427,39 @@ export default function Sidebar({
               </Button>
               <Button type="submit" disabled={!newGroup.trim()}>
                 Create
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Join with code dialog */}
+      <Dialog open={showJoin} onOpenChange={(o) => !o && setShowJoin(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Join a calendar</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={joinByCode} className="flex flex-col gap-3">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Enter the invite code someone shared with you.
+            </p>
+            <input
+              autoFocus
+              className={`${input} text-center font-mono tracking-wider`}
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value)}
+              placeholder="Invite code"
+            />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowJoin(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!joinCode.trim() || joining}>
+                {joining ? "Joining…" : "Join"}
               </Button>
             </DialogFooter>
           </form>
