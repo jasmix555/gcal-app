@@ -33,6 +33,8 @@ interface Props {
   focusMemoId?: string | null;
   /** Bumped by the app's change poll to refresh the list in near-real-time. */
   refreshSignal?: number;
+  /** Open straight into a new note prefilled with a deadline/calendar. */
+  compose?: { remind?: string; groupId?: string | null } | null;
   onChanged?: () => void;
 }
 
@@ -86,6 +88,7 @@ export default function NotesPanel({
   defaultGroupId,
   focusMemoId,
   refreshSignal,
+  compose,
   onChanged,
 }: Props) {
   const [memos, setMemos] = useState<Memo[]>([]);
@@ -158,6 +161,17 @@ export default function NotesPanel({
     const found = memos.find((m) => m.id === focusMemoId);
     if (found) openPreview(found);
   }, [open, focusMemoId, memos, openPreview]);
+
+  // Open a new note prefilled (e.g. "Note" chosen from a calendar date).
+  useEffect(() => {
+    if (!open || !compose) return;
+    setPreview(null);
+    setEditing("new");
+    setTitle("");
+    setContent("");
+    setGroupId(compose.groupId || defaultGroupId || "");
+    setRemind(compose.remind || "");
+  }, [open, compose]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openNew() {
     setPreview(null);

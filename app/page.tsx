@@ -12,6 +12,14 @@ import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell from "@/components/NotificationBell";
 import NotesPanel from "@/components/NotesPanel";
 import FindTimeModal from "@/components/FindTimeModal";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 interface GroupSummary {
@@ -54,9 +62,20 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [notesCompose, setNotesCompose] = useState<{
+    remind?: string;
+    groupId?: string | null;
+  } | null>(null);
   const [findOpen, setFindOpen] = useState(false);
   const [focusMemo, setFocusMemo] = useState<string | null>(null);
   const [live, setLive] = useState(false);
+  // When a calendar date is clicked/dragged, ask whether to add an event or a
+  // note (instead of jumping straight into the event composer).
+  const [addChoice, setAddChoice] = useState<{
+    start: string;
+    end?: string;
+    allDay: boolean;
+  } | null>(null);
   // Bumped by the change poll to tell the bell / notes panel to refetch.
   const [notifTick, setNotifTick] = useState(0);
   const [notesTick, setNotesTick] = useState(0);
@@ -233,19 +252,14 @@ export default function Home() {
     [groups, myId]
   );
 
+  // Dragging a range also opens the Event/Note chooser (carrying the span).
   const handleSelectRange = useCallback(
     (range: { start: string; end: string; allDay: boolean }) => {
-      let { start, end } = range;
-      const { allDay } = range;
-      // All-day grid selections come back with an EXCLUSIVE end (the day after).
-      // Convert to an inclusive end date for the modal (timezone-safe).
-      if (allDay) {
-        start = start.slice(0, 10);
-        const inclusive = shiftDateStr(end, -1);
-        end = inclusive < start ? start : inclusive;
-      }
-      setModalEvent({ title: "", start, end, allDay });
-      setCanDelete(false);
+      setAddChoice({
+        start: range.start,
+        end: range.end,
+        allDay: range.allDay,
+      });
     },
     []
   );
@@ -411,6 +425,7 @@ export default function Home() {
             <button
               onClick={() => {
                 setFocusMemo(null);
+                setNotesCompose(null);
                 setNotesOpen(true);
               }}
               aria-label="Notes"
@@ -461,26 +476,9 @@ export default function Home() {
                   setFocusMemo(id);
                   setNotesOpen(true);
                 }}
-                onDateClick={({ dateStr, allDay }) => {
-                  if (allDay || dateStr.length <= 10) {
-                    const d = dateStr.slice(0, 10);
-                    setModalEvent({
-                      title: "",
-                      start: d,
-                      end: d,
-                      allDay: true,
-                    });
-                  } else {
-                    const s = new Date(dateStr);
-                    setModalEvent({
-                      title: "",
-                      start: s.toISOString(),
-                      end: new Date(s.getTime() + 3600000).toISOString(),
-                      allDay: false,
-                    });
-                  }
-                  setCanDelete(false);
-                }}
+                onDateClick={({ dateStr, allDay }) =>
+                  setAddChoice({ start: dateStr, allDay })
+                }
               />
             )}
           </div>
@@ -499,6 +497,72 @@ export default function Home() {
           onClose={() => setModalEvent(null)}
         />
       )}
+
+      {/* Choose what to add when a calendar date is clicked */}
+      <Dialog open={!!addChoice} onOpenChange={(o) => !o && setAddChoice(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add to calendar</DialogTitle>
+            <DialogDescription>
+              Create an event or a note for this date.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => {
+                const c = addChoice!;
+                if (c.allDay) {
+                  const start = c.start.slice(0, 10);
+                  // Drag gives an exclusive end; make it inclusive (else single day).
+                  const inclusive = c.end ? shiftDateStr(c.end, -1) : start;
+                  const end = inclusive < start ? start : inclusive;
+                  setModalEvent({ title: "", start, end, allDay: true });
+                } else {
+                  const s = new Date(c.start);
+                  const end = c.end
+                    ? new Date(c.end).toISOString()
+                    : new Date(s.getTime() + 3600000).toISOString();
+                  setModalEvent({
+                    title: "",
+                    start: s.toISOString(),
+                    end,
+                    allDay: false,
+                  });
+                }
+                setCanDelete(false);
+                setAddChoice(null);
+              }}
+              className="flex flex-col items-center gap-2 rounded-xl border border-slate-200 p-5 text-sm font-medium transition hover:border-blue-500 hover:bg-blue-50 dark:border-slate-700 dark:hover:bg-blue-950/30"
+            >
+              <span className="text-2xl">📅</span>
+              Event
+            </button>
+            <button
+              onClick={() => {
+                const c = addChoice!;
+                let remind: string;
+                if (c.allDay) {
+                  remind = `${c.start.slice(0, 10)}T09:00`;
+                } else {
+                  const d = new Date(c.start);
+                  const p = (n: number) => String(n).padStart(2, "0");
+                  remind = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(
+                    d.getDate()
+                  )}T${p(d.getHours())}:${p(d.getMinutes())}`;
+                }
+                setNotesCompose({ remind, groupId: defaultGroupId });
+                setFocusMemo(null);
+                setNotesOpen(true);
+                setAddChoice(null);
+              }}
+              className="flex flex-col items-center gap-2 rounded-xl border border-slate-200 p-5 text-sm font-medium transition hover:border-blue-500 hover:bg-blue-50 dark:border-slate-700 dark:hover:bg-blue-950/30"
+            >
+              <span className="text-2xl">📝</span>
+              Note
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <FindTimeModal
         open={findOpen}
@@ -528,6 +592,7 @@ export default function Home() {
         groups={groups}
         defaultGroupId={defaultGroupId}
         focusMemoId={focusMemo}
+        compose={notesCompose}
         refreshSignal={notesTick}
         onChanged={() => calRef.current?.refetch()}
       />

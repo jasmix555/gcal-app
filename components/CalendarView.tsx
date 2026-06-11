@@ -244,6 +244,9 @@ const CalendarView = forwardRef<CalendarHandle, Props>(function CalendarView(
         nowIndicator
         editable
         selectable
+        // A plain click → dateClick (the Event/Note chooser); only a real drag
+        // starts a range selection → creates an event for that span.
+        selectMinDistance={5}
         selectMirror
         dayMaxEvents
         eventDisplay="block"
