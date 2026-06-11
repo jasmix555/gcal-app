@@ -11,6 +11,20 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  // Ensure the user has a private "Personal" calendar (group flagged isPersonal).
+  const personal = await prisma.group.findFirst({
+    where: { isPersonal: true, memberships: { some: { userId } } },
+  });
+  if (!personal) {
+    await prisma.group.create({
+      data: {
+        name: "Personal",
+        isPersonal: true,
+        memberships: { create: { userId, role: "OWNER" } },
+      },
+    });
+  }
+
   const memberships = await prisma.membership.findMany({
     where: { userId },
     include: {
@@ -26,7 +40,13 @@ export async function GET() {
     name: m.group.name,
     role: m.role,
     memberCount: m.group._count.memberships,
+    isPersonal: m.group.isPersonal,
   }));
+
+  // Personal calendar first.
+  groups.sort((a, b) =>
+    a.isPersonal === b.isPersonal ? 0 : a.isPersonal ? -1 : 1
+  );
 
   return NextResponse.json({ groups });
 }
@@ -40,7 +60,10 @@ export async function POST(req: NextRequest) {
 
   const { name } = await req.json();
   if (!name || !String(name).trim()) {
-    return NextResponse.json({ error: "Group name is required." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Group name is required." },
+      { status: 400 }
+    );
   }
 
   const group = await prisma.group.create({

@@ -19,7 +19,10 @@ export async function DELETE(
   if (!me) {
     return NextResponse.json({ error: "Not a member" }, { status: 403 });
   }
-  if (me.role !== "OWNER" && me.role !== "ADMIN") {
+
+  // Removing yourself = leaving the group (allowed for non-owners).
+  const isSelf = params.userId === me.userId;
+  if (!isSelf && me.role !== "OWNER" && me.role !== "ADMIN") {
     return NextResponse.json(
       { error: "Only owners and admins can remove members." },
       { status: 403 }
@@ -32,18 +35,20 @@ export async function DELETE(
   if (!target) {
     return NextResponse.json(
       { error: "That person isn't in this group." },
-      {
-        status: 404,
-      }
+      { status: 404 }
     );
   }
   if (target.role === "OWNER") {
     return NextResponse.json(
-      { error: "The group owner can't be removed." },
+      {
+        error: isSelf
+          ? "Owners can't leave their own group — delete it instead."
+          : "The group owner can't be removed.",
+      },
       { status: 403 }
     );
   }
-  if (me.role === "ADMIN" && target.role === "ADMIN") {
+  if (!isSelf && me.role === "ADMIN" && target.role === "ADMIN") {
     return NextResponse.json(
       { error: "Admins can't remove other admins." },
       { status: 403 }

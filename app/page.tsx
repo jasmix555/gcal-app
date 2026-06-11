@@ -9,6 +9,7 @@ import CalendarView, {
 import Sidebar from "@/components/Sidebar";
 import EventModal, { EditableEvent } from "@/components/EventModal";
 import ThemeToggle from "@/components/ThemeToggle";
+import NotificationBell from "@/components/NotificationBell";
 import { toast } from "sonner";
 
 interface GroupSummary {
@@ -16,6 +17,7 @@ interface GroupSummary {
   name: string;
   role: string;
   memberCount: number;
+  isPersonal: boolean;
 }
 
 // Safely read an error message even if the response body is empty/non-JSON.
@@ -94,6 +96,30 @@ export default function Home() {
     setCanDelete(false);
   }
 
+  async function openEventById(id: string) {
+    try {
+      const res = await fetch(`/api/events/${id}`);
+      if (!res.ok) return;
+      const { event: ev } = await res.json();
+      setModalEvent({
+        id: ev.id,
+        title: ev.title,
+        description: ev.description,
+        location: ev.location,
+        color: ev.color,
+        start: ev.start,
+        end: ev.end,
+        allDay: ev.allDay,
+        createdBy: ev.createdBy,
+        updatedBy: ev.updatedBy,
+      });
+      const privileged = currentRole === "OWNER" || currentRole === "ADMIN";
+      setCanDelete(privileged || ev.createdBy?.id === myId);
+    } catch {
+      /* ignore */
+    }
+  }
+
   const openExisting = useCallback(
     (ev: CalendarEvent) => {
       setModalEvent(ev);
@@ -139,7 +165,7 @@ export default function Home() {
         const res = await fetch("/api/events", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...e, groupId: currentGroupId }),
+          body: JSON.stringify({ ...e, groupId: e.groupId || currentGroupId }),
         });
         if (!res.ok) throw new Error(await errorMessage(res, "Create failed"));
       }
@@ -255,7 +281,14 @@ export default function Home() {
               <line x1="9" y1="4" x2="9" y2="20" />
             </svg>
           </button>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <NotificationBell
+              onOpenEvent={openEventById}
+              onInvitationAccepted={(groupId) => {
+                loadGroups();
+                setCurrentGroupId(groupId);
+              }}
+            />
             <ThemeToggle />
           </div>
         </div>
@@ -280,6 +313,8 @@ export default function Home() {
           event={modalEvent}
           canDelete={canDelete}
           saving={saving}
+          groups={groups}
+          defaultGroupId={currentGroupId}
           onSave={handleSave}
           onDelete={handleDelete}
           onClose={() => setModalEvent(null)}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
 import {
   Dialog,
   DialogContent,
@@ -20,11 +21,20 @@ export interface EditableEvent {
   description?: string;
   location?: string;
   color?: string | null;
+  groupId?: string | null; // which calendar the event belongs to
   start: string;
   end: string;
   allDay?: boolean;
-  createdBy?: { name?: string | null; email?: string | null };
+  attendees?: string[]; // emails (sent on save)
+  createdBy?: { id?: string; name?: string | null; email?: string | null };
   updatedBy?: { name?: string | null; email?: string | null } | null;
+}
+
+interface Attendee {
+  id?: string;
+  name?: string | null;
+  email: string;
+  status?: string;
 }
 
 interface Activity {
@@ -33,9 +43,17 @@ interface Activity {
   createdAt: string;
 }
 
+interface GroupOption {
+  id: string;
+  name: string;
+  isPersonal?: boolean;
+}
+
 interface Props {
   event: EditableEvent;
   canDelete?: boolean;
+  groups?: GroupOption[];
+  defaultGroupId?: string | null;
   onSave: (e: EditableEvent) => void;
   onDelete?: (id: string) => void;
   onClose: () => void;
@@ -96,18 +114,47 @@ function who(u?: { name?: string | null; email?: string | null } | null) {
   return u.name || u.email || "unknown";
 }
 
+const STATUS_STYLE: Record<string, string> = {
+  ACCEPTED:
+    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+  DECLINED: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+  PROPOSED:
+    "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+  INVITED: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
+};
+const STATUS_LABEL: Record<string, string> = {
+  ACCEPTED: "Going",
+  DECLINED: "Declined",
+  PROPOSED: "Proposed new time",
+  INVITED: "Invited",
+};
+
 export default function EventModal({
   event,
   canDelete,
+  groups = [],
+  defaultGroupId,
   onSave,
   onDelete,
   onClose,
   saving,
 }: Props) {
+  const { data: session } = useSession();
+  const myId = (session?.user as any)?.id as string | undefined;
+
   const [form, setForm] = useState<EditableEvent>(event);
+  const [targetGroupId, setTargetGroupId] = useState<string | null>(
+    event.groupId ?? defaultGroupId ?? null
+  );
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [guestEmail, setGuestEmail] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [mode, setMode] = useState<"view" | "edit">(event.id ? "view" : "edit");
+  const [proposing, setProposing] = useState(false);
+  const [proposeStart, setProposeStart] = useState("");
+  const [proposeEnd, setProposeEnd] = useState("");
+  const [rsvpLoading, setRsvpLoading] = useState(false);
 
   useEffect(() => {
     setForm({
@@ -117,23 +164,58 @@ export default function EventModal({
       end: toLocalInput(event.end, event.allDay),
     });
     setMode(event.id ? "view" : "edit");
+    setProposing(false);
+    setAttendees([]);
+    setTargetGroupId(event.groupId ?? defaultGroupId ?? null);
     if (event.id) {
       fetch(`/api/events/${event.id}`)
         .then((r) => r.json())
-        .then((d) => setActivities(d.event?.activities || []))
-        .catch(() => setActivities([]));
+        .then((d) => {
+          setActivities(d.event?.activities || []);
+          setAttendees(d.event?.attendees || []);
+          if (d.event?.groupId) setTargetGroupId(d.event.groupId);
+        })
+        .catch(() => {});
     } else {
       setActivities([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event]);
 
   const isEdit = Boolean(form.id);
+  const myAttendee = attendees.find((a) => a.id && a.id === myId);
+  const amOrganizer = (form.createdBy as any)?.id === myId;
 
   function update<K extends keyof EditableEvent>(
     key: K,
     val: EditableEvent[K]
   ) {
     setForm((f) => ({ ...f, [key]: val }));
+  }
+
+  async function addGuest(e: React.FormEvent) {
+    e.preventDefault();
+    const email = guestEmail.trim().toLowerCase();
+    if (!email) return;
+    if (attendees.some((a) => a.email === email)) {
+      setGuestEmail("");
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/users/resolve?email=${encodeURIComponent(email)}`
+      );
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Could not find that person.");
+      setAttendees((arr) => [...arr, { ...d.user, status: "INVITED" }]);
+      setGuestEmail("");
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  }
+
+  function removeGuest(email: string) {
+    setAttendees((arr) => arr.filter((a) => a.email !== email));
   }
 
   function handleSave() {
@@ -143,6 +225,8 @@ export default function EventModal({
     }
     onSave({
       ...form,
+      groupId: targetGroupId,
+      attendees: attendees.map((a) => a.email),
       start: form.allDay
         ? form.start.slice(0, 10)
         : new Date(form.start).toISOString(),
@@ -152,6 +236,49 @@ export default function EventModal({
     });
   }
 
+  async function submitRsvp(status: "ACCEPTED" | "DECLINED" | "PROPOSED") {
+    if (!form.id) return;
+    setRsvpLoading(true);
+    try {
+      const extra =
+        status === "PROPOSED"
+          ? {
+              proposedStart: new Date(proposeStart).toISOString(),
+              proposedEnd: new Date(proposeEnd).toISOString(),
+            }
+          : {};
+      const res = await fetch(`/api/events/${form.id}/rsvp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, ...extra }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Could not respond");
+      }
+      toast.success(
+        status === "ACCEPTED"
+          ? "You're going"
+          : status === "DECLINED"
+            ? "Declined"
+            : "Proposed a new time"
+      );
+      const d = await (await fetch(`/api/events/${form.id}`)).json();
+      setAttendees(d.event?.attendees || []);
+      setProposing(false);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setRsvpLoading(false);
+    }
+  }
+
+  function startPropose() {
+    setProposeStart(form.start);
+    setProposeEnd(form.end);
+    setProposing(true);
+  }
+
   const dotColor = form.color || "#2563eb";
 
   return (
@@ -159,7 +286,6 @@ export default function EventModal({
       <DialogContent
         className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0"
         onInteractOutside={(e) => {
-          // Don't close the modal when interacting with the floating date picker.
           const t = (e.detail as any)?.originalEvent?.target as
             | HTMLElement
             | undefined;
@@ -168,7 +294,6 @@ export default function EventModal({
       >
         {mode === "view" ? (
           <>
-            {/* Toolbar: edit / delete (close is built into DialogContent) */}
             <div className="flex items-center justify-end gap-1 px-3 pb-1 pr-12 pt-3">
               <button
                 onClick={() => setMode("edit")}
@@ -228,28 +353,102 @@ export default function EventModal({
                 <div>{formatRange(form.start, form.end, form.allDay)}</div>
                 {form.location && <div>📍 {form.location}</div>}
                 {form.description && (
-                  <div className="whitespace-pre-wrap text-slate-600 dark:text-slate-300">
-                    {form.description}
-                  </div>
+                  <div className="whitespace-pre-wrap">{form.description}</div>
                 )}
               </div>
+
+              {attendees.length > 0 && (
+                <div className="mt-4 pl-[26px]">
+                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                    Guests
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {attendees.map((a) => (
+                      <div
+                        key={a.email}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <span className="truncate">{a.name || a.email}</span>
+                        <span
+                          className={`ml-auto rounded-full px-2 py-0.5 text-[11px] ${STATUS_STYLE[a.status || "INVITED"]}`}
+                        >
+                          {STATUS_LABEL[a.status || "INVITED"]}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* RSVP — shown to an invited guest (not the organizer) */}
+              {myAttendee && !amOrganizer && (
+                <div className="mt-4 rounded-xl border border-slate-200 p-3 pl-[26px] dark:border-slate-800">
+                  <div className="mb-2 text-sm font-medium">Your response</div>
+                  {!proposing ? (
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => submitRsvp("ACCEPTED")}
+                        disabled={rsvpLoading}
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => submitRsvp("DECLINED")}
+                        disabled={rsvpLoading}
+                      >
+                        Decline
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={startPropose}
+                        disabled={rsvpLoading}
+                      >
+                        Propose new time
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <DateTimeField
+                          value={proposeStart}
+                          allDay={form.allDay}
+                          onChange={setProposeStart}
+                        />
+                        <DateTimeField
+                          value={proposeEnd}
+                          allDay={form.allDay}
+                          onChange={setProposeEnd}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => submitRsvp("PROPOSED")}
+                          disabled={rsvpLoading}
+                        >
+                          Send proposal
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setProposing(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="mt-4 flex flex-col gap-1 border-t border-slate-200 pl-[26px] pt-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
                 <div>Created by {who(form.createdBy)}</div>
                 {form.updatedBy && (
                   <div>Last edited by {who(form.updatedBy)}</div>
-                )}
-                {activities.length > 0 && (
-                  <>
-                    <div className="mt-1 font-semibold">History</div>
-                    {activities.slice(0, 6).map((a, i) => (
-                      <div key={i} className="flex gap-1.5">
-                        <span>{who(a.user)}</span>
-                        <span>{a.action}</span>
-                        <span>· {new Date(a.createdAt).toLocaleString()}</span>
-                      </div>
-                    ))}
-                  </>
                 )}
               </div>
             </div>
@@ -261,6 +460,23 @@ export default function EventModal({
             </DialogHeader>
 
             <div className="flex flex-1 flex-col gap-3.5 overflow-y-auto px-6 py-2">
+              {groups.length > 0 && (
+                <div>
+                  <label className={label}>Calendar</label>
+                  <select
+                    className={input}
+                    value={targetGroupId || ""}
+                    onChange={(e) => setTargetGroupId(e.target.value)}
+                  >
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.isPersonal ? "🔒 Personal (only me)" : g.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className={label}>Title</label>
                 <input
@@ -318,6 +534,50 @@ export default function EventModal({
                     onChange={(v) => update("end", v)}
                   />
                 </div>
+              </div>
+
+              {/* Guests / attendees */}
+              <div>
+                <label className={label}>Guests</label>
+                <form className="flex gap-2" onSubmit={addGuest}>
+                  <input
+                    className={input}
+                    type="email"
+                    placeholder="Add guest by email"
+                    value={guestEmail}
+                    onChange={(e) => setGuestEmail(e.target.value)}
+                  />
+                  <Button type="submit" variant="outline">
+                    Add
+                  </Button>
+                </form>
+                {attendees.length > 0 && (
+                  <div className="mt-2 flex flex-col gap-1">
+                    {attendees.map((a) => (
+                      <div
+                        key={a.email}
+                        className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-sm dark:bg-slate-800"
+                      >
+                        <span className="truncate">{a.name || a.email}</span>
+                        {a.status && a.status !== "INVITED" && (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] ${STATUS_STYLE[a.status]}`}
+                          >
+                            {STATUS_LABEL[a.status]}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeGuest(a.email)}
+                          aria-label={`Remove ${a.email}`}
+                          className="ml-auto text-slate-400 hover:text-red-600"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>

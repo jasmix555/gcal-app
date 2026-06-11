@@ -68,6 +68,17 @@ export async function POST(
     );
   }
 
+  // Already invited (pending)?
+  const existingInvite = await prisma.invitation.findFirst({
+    where: { groupId: params.id, email: normalizedEmail, status: "pending" },
+  });
+  if (existingInvite) {
+    return NextResponse.json(
+      { error: "An invitation has already been sent to that email." },
+      { status: 409 }
+    );
+  }
+
   const token = randomBytes(24).toString("hex");
   const invitation = await prisma.invitation.create({
     data: {

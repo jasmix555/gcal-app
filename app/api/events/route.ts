@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getMembership } from "@/lib/permissions";
+import { notify } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -8,9 +9,16 @@ const userSelect = {
   select: { id: true, name: true, email: true, image: true },
 };
 
+const eventInclude = {
+  createdBy: userSelect,
+  updatedBy: userSelect,
+  attendees: { include: { user: userSelect } },
+};
+
 function serialize(e: any) {
   return {
     id: e.id,
+    groupId: e.groupId,
     title: e.title,
     description: e.description || "",
     location: e.location || "",
@@ -22,6 +30,14 @@ function serialize(e: any) {
     updatedBy: e.updatedBy,
     createdAt: e.createdAt,
     updatedAt: e.updatedAt,
+    attendees: (e.attendees || []).map((a: any) => ({
+      id: a.user.id,
+      name: a.user.name,
+      email: a.user.email,
+      status: a.status,
+      proposedStart: a.proposedStart ? a.proposedStart.toISOString() : null,
+      proposedEnd: a.proposedEnd ? a.proposedEnd.toISOString() : null,
+    })),
   };
 }
 
@@ -49,7 +65,7 @@ export async function GET(req: NextRequest) {
   try {
     const events = await prisma.event.findMany({
       where,
-      include: { createdBy: userSelect, updatedBy: userSelect },
+      include: eventInclude,
       orderBy: { start: "asc" },
     });
     return NextResponse.json({ events: events.map(serialize) });
@@ -81,6 +97,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Resolve attendee emails to registered users (excluding the creator).
+  const emails: string[] = Array.isArray(body.attendees)
+    ? body.attendees.map((e: string) => String(e).toLowerCase().trim())
+    : [];
+  const attendeeUsers = emails.length
+    ? (await prisma.user.findMany({ where: { email: { in: emails } } })).filter(
+        (u) => u.id !== membership.userId
+      )
+    : [];
+
   try {
     const event = await prisma.event.create({
       data: {
@@ -96,9 +122,33 @@ export async function POST(req: NextRequest) {
         activities: {
           create: { userId: membership.userId, action: "created" },
         },
+        attendees: {
+          create: attendeeUsers.map((u) => ({ userId: u.id })),
+        },
       },
-      include: { createdBy: userSelect, updatedBy: userSelect },
+      include: eventInclude,
     });
+
+    // Notify each invited attendee.
+    const creator = await prisma.user.findUnique({
+      where: { id: membership.userId },
+      select: { name: true, email: true },
+    });
+    const who = creator?.name || creator?.email || "Someone";
+    await Promise.all(
+      attendeeUsers.map((u) =>
+        notify({
+          userId: u.id,
+          type: "EVENT_INVITE",
+          eventId: event.id,
+          actorId: membership.userId,
+          message: `${who} invited you to “${event.title}”.`,
+          recipientEmail: u.email,
+          emailSubject: `Invitation: ${event.title}`,
+        })
+      )
+    );
+
     return NextResponse.json({ event: serialize(event) });
   } catch (err: any) {
     return NextResponse.json(

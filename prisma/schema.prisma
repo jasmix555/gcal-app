@@ -24,13 +24,16 @@ model User {
   passwordHash  String? // null for users who only sign in with Google
   createdAt     DateTime  @default(now())
 
-  accounts      Account[]
-  sessions      Session[]
-  memberships   Membership[]
-  createdEvents Event[]         @relation("EventCreatedBy")
-  updatedEvents Event[]         @relation("EventUpdatedBy")
-  activities    EventActivity[]
-  sentInvites   Invitation[]    @relation("InvitedBy")
+  accounts           Account[]
+  sessions           Session[]
+  memberships        Membership[]
+  createdEvents      Event[]         @relation("EventCreatedBy")
+  updatedEvents      Event[]         @relation("EventUpdatedBy")
+  activities         EventActivity[]
+  sentInvites        Invitation[]    @relation("InvitedBy")
+  attendances        EventAttendee[]
+  notifications      Notification[]  @relation("UserNotifications")
+  actedNotifications Notification[]  @relation("ActorNotifications")
 }
 
 model Account {
@@ -73,10 +76,11 @@ model VerificationToken {
 // ---------------------------------------------------------------------------
 
 model Group {
-  id        String   @id @default(cuid())
-  name      String
-  joinCode  String?  @unique // reusable code for the shareable group invite link
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  name       String
+  joinCode   String?  @unique // reusable code for the shareable group invite link
+  isPersonal Boolean  @default(false) // a user's private "only me" calendar
+  createdAt  DateTime @default(now())
 
   memberships Membership[]
   events      Event[]
@@ -139,10 +143,12 @@ model Event {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  group      Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  createdBy  User            @relation("EventCreatedBy", fields: [createdById], references: [id])
-  updatedBy  User?           @relation("EventUpdatedBy", fields: [updatedById], references: [id])
-  activities EventActivity[]
+  group         Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy     User            @relation("EventCreatedBy", fields: [createdById], references: [id])
+  updatedBy     User?           @relation("EventUpdatedBy", fields: [updatedById], references: [id])
+  activities    EventActivity[]
+  attendees     EventAttendee[]
+  notifications Notification[]
 
   @@index([groupId])
   @@index([start])
@@ -160,4 +166,57 @@ model EventActivity {
   user  User  @relation(fields: [userId], references: [id])
 
   @@index([eventId])
+}
+
+// ---------------------------------------------------------------------------
+// Appointments: attendees with RSVP, and notifications.
+// ---------------------------------------------------------------------------
+
+enum AttendeeStatus {
+  INVITED
+  ACCEPTED
+  DECLINED
+  PROPOSED // suggested a different time
+}
+
+model EventAttendee {
+  id            String         @id @default(cuid())
+  eventId       String
+  userId        String
+  status        AttendeeStatus @default(INVITED)
+  proposedStart DateTime?
+  proposedEnd   DateTime?
+  createdAt     DateTime       @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId])
+}
+
+enum NotificationType {
+  EVENT_INVITE
+  EVENT_UPDATED
+  EVENT_CANCELLED
+  RSVP_ACCEPTED
+  RSVP_DECLINED
+  TIME_PROPOSED
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String // recipient
+  type      NotificationType
+  message   String
+  eventId   String?
+  actorId   String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user  User   @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  actor User?  @relation("ActorNotifications", fields: [actorId], references: [id], onDelete: SetNull)
+  event Event? @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
 }

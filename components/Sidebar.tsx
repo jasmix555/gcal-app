@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { colorForKey } from "@/lib/colors";
 import InviteModal from "@/components/InviteModal";
@@ -12,6 +12,7 @@ interface GroupSummary {
   name: string;
   role: string;
   memberCount: number;
+  isPersonal?: boolean;
 }
 
 interface Member {
@@ -19,13 +20,6 @@ interface Member {
   name?: string | null;
   email?: string | null;
   role: string;
-}
-
-interface PendingInvite {
-  id: string;
-  token: string;
-  role: string;
-  group: { id: string; name: string };
 }
 
 interface Props {
@@ -71,12 +65,15 @@ export default function Sidebar({
   onGroupsChanged,
   onNewEvent,
 }: Props) {
+  const { data: session } = useSession();
+  const myId = (session?.user as any)?.id as string | undefined;
+
   const [members, setMembers] = useState<Member[]>([]);
   const [myRole, setMyRole] = useState<string>("MEMBER");
   const [newGroup, setNewGroup] = useState("");
   const [showInvite, setShowInvite] = useState(false);
-  const [pending, setPending] = useState<PendingInvite[]>([]);
   const [confirmDeleteGroup, setConfirmDeleteGroup] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<Member | null>(null);
 
   const loadMembers = useCallback(() => {
@@ -94,14 +91,6 @@ export default function Sidebar({
   }, [currentGroupId]);
 
   useEffect(loadMembers, [loadMembers]);
-
-  function loadPending() {
-    fetch("/api/invitations")
-      .then((r) => r.json())
-      .then((d) => setPending(d.invitations || []))
-      .catch(() => setPending([]));
-  }
-  useEffect(loadPending, []);
 
   async function createGroup(e: React.FormEvent) {
     e.preventDefault();
@@ -121,24 +110,6 @@ export default function Sidebar({
       if (d.group?.id) onSelectGroup(d.group.id);
     } catch (err: any) {
       toast.error(err.message || "Could not create group");
-    }
-  }
-
-  async function accept(token: string) {
-    try {
-      const res = await fetch("/api/invitations/accept", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || "Could not accept invite");
-      toast.success("Invitation accepted");
-      loadPending();
-      onGroupsChanged();
-      if (d.groupId) onSelectGroup(d.groupId);
-    } catch (err: any) {
-      toast.error(err.message);
     }
   }
 
@@ -175,8 +146,27 @@ export default function Sidebar({
     }
   }
 
-  const canInvite = myRole === "OWNER" || myRole === "ADMIN";
+  async function doLeaveGroup() {
+    if (!currentGroupId || !myId) return;
+    try {
+      const res = await fetch(`/api/groups/${currentGroupId}/members/${myId}`, {
+        method: "DELETE",
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Could not leave group");
+      toast.success("Left the group");
+      onSelectGroup("");
+      onGroupsChanged();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  }
+
+  const currentGroup = groups.find((g) => g.id === currentGroupId);
+  const isPersonal = !!currentGroup?.isPersonal;
   const isOwner = myRole === "OWNER";
+  const canInvite = (myRole === "OWNER" || myRole === "ADMIN") && !isPersonal;
+  const canLeave = !!currentGroupId && !isPersonal && !isOwner;
 
   // Only disambiguate with a count when two groups share the exact same name.
   const nameCounts = groups.reduce<Record<string, number>>((acc, g) => {
@@ -193,6 +183,7 @@ export default function Sidebar({
       {user && (
         <div className="flex items-center gap-2.5 text-sm">
           {user.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img src={user.image} alt="" className="h-8 w-8 rounded-full" />
           ) : (
             <Avatar name={user.name} email={user.email} />
@@ -222,8 +213,10 @@ export default function Sidebar({
           {groups.length === 0 && <option value="">No groups yet</option>}
           {groups.map((g) => (
             <option key={g.id} value={g.id}>
-              {g.name}
-              {nameCounts[g.name] > 1 ? ` (${g.memberCount} members)` : ""}
+              {g.isPersonal ? "🔒 Personal (only me)" : g.name}
+              {!g.isPersonal && nameCounts[g.name] > 1
+                ? ` (${g.memberCount} members)`
+                : ""}
             </option>
           ))}
         </select>
@@ -244,7 +237,7 @@ export default function Sidebar({
         </form>
       </div>
 
-      {currentGroupId && (
+      {currentGroupId && !isPersonal && (
         <div>
           <p className={label}>Members</p>
           <div className="flex flex-col gap-0.5">
@@ -283,7 +276,7 @@ export default function Sidebar({
         </button>
       )}
 
-      {currentGroupId && isOwner && (
+      {isOwner && !isPersonal && (
         <button
           className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-red-600 transition hover:bg-red-50 dark:border-red-900/60 dark:bg-slate-900 dark:text-red-400 dark:hover:bg-red-950/40"
           onClick={() => setConfirmDeleteGroup(true)}
@@ -292,28 +285,13 @@ export default function Sidebar({
         </button>
       )}
 
-      {pending.length > 0 && (
-        <div>
-          <p className={label}>Invitations for you</p>
-          <div className="flex flex-col gap-2">
-            {pending.map((p) => (
-              <div
-                key={p.id}
-                className="flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white p-2 text-[13px] dark:border-slate-700 dark:bg-slate-800"
-              >
-                <div>
-                  <strong>{p.group.name}</strong> · {p.role}
-                </div>
-                <button
-                  className={`${btnPrimary} px-2.5 py-1 text-xs`}
-                  onClick={() => accept(p.token)}
-                >
-                  Accept
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
+      {canLeave && (
+        <button
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+          onClick={() => setConfirmLeave(true)}
+        >
+          Leave group
+        </button>
       )}
 
       <div className="mt-auto">
@@ -359,6 +337,18 @@ export default function Sidebar({
           const m = memberToRemove;
           setMemberToRemove(null);
           if (m) doRemoveMember(m);
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmLeave}
+        onOpenChange={setConfirmLeave}
+        title={`Leave “${currentGroupName}”?`}
+        description="You'll lose access to this calendar. You can be invited back later."
+        confirmLabel="Leave group"
+        onConfirm={() => {
+          setConfirmLeave(false);
+          doLeaveGroup();
         }}
       />
     </aside>
